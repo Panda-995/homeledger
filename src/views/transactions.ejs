@@ -14,7 +14,7 @@
 %>
 
 <div class="card tight mb16">
-  <div class="row wrap mb12" style="gap:6px">
+  <div class="row wrap chip-row mb12" style="gap:6px">
     <a class="chip <%= !f.month && !f.from && !f.to ? 'primary' : '' %>" href="/transactions<%= qs({ month:'', from:'', to:'', page:1 }) %>">全部</a>
     <a class="chip <%= f.month === curMonth ? 'primary' : '' %>" href="/transactions<%= qs({ month: curMonth, from:'', to:'', page:1 }) %>">本月</a>
     <a class="chip" href="/transactions<%= qs({ month:'', from: helpers.addDays(today, -6), to: today, page:1 }) %>">近 7 天</a>

@@ -56,7 +56,12 @@
             </div>
           </div>
           <div class="txn-amt amount <%= t.type === 'income' ? 'income' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? 'neutral' : 'expense') %>">
-            <%= (t.type === 'income' ? '+' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? '' : '-')) %><%= helpers.fmtAmount(t.amount_cents) %>
+            <% if (t.type === 'adjust') { %>
+              <%# 余额调整金额自带符号（调减为负），不加前后缀 %>
+              <%= helpers.fmtAmount(t.amount_cents) %>
+            <% } else { %>
+              <%= (t.type === 'income' ? '+' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? '' : '-')) %><%= helpers.fmtAmount(t.amount_cents) %>
+            <% } %>
             <% if (t.currency !== 'CNY') { %><div class="tiny muted"><%= t.currency %></div><% } %>
           </div>
           <div class="txn-act">

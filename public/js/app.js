@@ -63,6 +63,7 @@
     btn.type = 'button';
     btn.className = 'hl-select-trigger';
     btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
     btn.innerHTML =
       '<span class="hl-select-label"></span>' +
       '<span class="hl-select-caret"><svg class="icon sm"><use href="#i-chevron-down"></use></svg></span>';
@@ -72,7 +73,7 @@
     const labelEl = $('.hl-select-label', btn);
 
     let open = false;
-    // 菜单容器懒创建：未展开时不渲染空壳，避免页面残留空白胶囊
+    // 菜单容器懒创建：未展开时不渲染空壳；关闭后由 CSS（.hl-select-menu 默认 display:none）隐藏
     let menu = null;
     function ensureMenu() {
       if (menu) return menu;
@@ -86,8 +87,22 @@
 
     function renderLabel() {
       const opt = sel.options[sel.selectedIndex];
-      labelEl.textContent = optionLabel(opt);
+      labelEl.innerHTML = optionInner(opt);
       labelEl.classList.toggle('ph', !sel.value);
+    }
+
+    /** 选项内容：首个 emoji/图形符号作图标列；尾部「（说明）」拆成右侧副文本 */
+    function optionInner(opt) {
+      const label = optionLabel(opt);
+      if (!label) return '<span class="ph">请选择…</span>';
+      const m = /^((?:\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDE4F\uDE80-\uDEFF]|[\u2600-\u27BF]|\uFE0F|\u200D|[\u{1F000}-\u{1FAFF}]|[\u2190-\u21FF])+)\s*(.*)$/u.exec(label);
+      let ico = '';
+      let rest = label;
+      if (m && m[1]) { ico = '<span class="opt-ico">' + esc(m[1]) + '</span>'; rest = m[2]; }
+      const sub = /^(.*?)\s*（([^）]*)）\s*$/.exec(rest);
+      const main = sub ? sub[1] : rest;
+      const subHtml = sub ? '<span class="opt-sub">' + esc(sub[2]) + '</span>' : '';
+      return ico + '<span class="opt-label">' + esc(main) + '</span>' + subHtml;
     }
 
     function buildMenu() {
@@ -100,8 +115,11 @@
         b.type = 'button';
         b.className = 'hl-select-opt' + (opt.selected ? ' selected' : '');
         b.setAttribute('role', 'option');
-        b.innerHTML = '<span>' + esc(optionLabel(opt)) + '</span>' +
+        b.setAttribute('aria-selected', opt.selected ? 'true' : 'false');
+        if (opt.disabled) b.disabled = true;
+        b.innerHTML = optionInner(opt) +
           '<svg class="icon sm checkmark"><use href="#i-check"></use></svg>';
+        b.title = optionLabel(opt);
         b.addEventListener('click', () => {
           if (sel.value !== opt.value) {
             sel.value = opt.value;
@@ -138,8 +156,15 @@
       const want = force === undefined ? !open : force;
       if (want === open || btn.disabled) return;
       open = want;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open) {
-        $$('body .hl-select.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
+        $$('body .hl-select.open').forEach((w) => {
+          if (w !== wrap) {
+            w.classList.remove('open');
+            const b = $('.hl-select-trigger', w);
+            if (b) b.setAttribute('aria-expanded', 'false');
+          }
+        });
         ensureMenu();
         buildMenu();
         wrap.classList.add('open');
@@ -160,10 +185,12 @@
       else if (e.key === 'Tab') { toggle(false); }
     }
 
-    btn.addEventListener('click', () => toggle());
+    // 触发器获得焦点时按 Esc 也能收回（键盘用户的第二收回路）
     btn.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && open) { e.preventDefault(); toggle(false); return; }
       if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); toggle(true); }
     });
+    btn.addEventListener('click', () => toggle());
     // 外部点击关闭 / 窗口缩放重定位：用单例委托（注册一次），避免每个实例往 document/window
     // 挂常驻监听——AI 页反复识别会不断新建实例，逐实例监听只增不减（内存泄漏）
     wrap._hlPlace = place;
@@ -833,6 +860,22 @@
   function initSidebar() {
     const sb = document.querySelector('.sidebar');
     if (!sb) return;
+    // JS 可用才启用抽屉显示（CSS 用 body.nav-ready 覆盖移动端 display:none）
+    document.body.classList.add('nav-ready');
+
+    // 移动端抽屉：汉堡开 / 遮罩与关闭钮与链接点击关 / Esc 关
+    const burger = $('#navBurger');
+    const mask = $('#drawerMask');
+    const closeBtn = $('#navDrawerClose');
+    const close = () => document.body.classList.remove('nav-open');
+    if (burger && mask) {
+      burger.addEventListener('click', () => document.body.classList.toggle('nav-open'));
+      mask.addEventListener('click', close);
+      if (closeBtn) closeBtn.addEventListener('click', close);
+      sb.addEventListener('click', (e) => { if (e.target.closest('a, select')) close(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    }
+
     const KEY = 'hl-sidebar-scroll';
     // 跳转后恢复上次的内部滚动位置，菜单不会"跳回开头"
     const saved = sessionStorage.getItem(KEY);

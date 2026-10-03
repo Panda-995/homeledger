@@ -9,11 +9,14 @@
  * 图标清单在下方 ICONS 数组里维护；页面里用 <svg class="icon"><use href="#i-<name>"></use></svg> 引用。
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ICONS = [
-  'house', 'pencil', 'list', 'calendar-days', 'bot', 'chart-column', 'search',
+  'menu', 'house', 'pencil', 'list', 'calendar-days', 'bot', 'chart-column', 'search',
   'credit-card', 'target', 'repeat', 'receipt', 'users-round', 'piggy-bank',
   'tag', 'tags', 'download', 'upload', 'library', 'bell', 'settings', 'info',
   'sun', 'moon', 'plus', 'user-round', 'log-out', 'trash-2', 'x', 'paperclip',

@@ -15,10 +15,13 @@
 <%- include('partials/icons') %>
 <div class="shell">
 
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebarNav">
     <div class="brand">
       <div class="brand-logo"><svg class="icon"><use href="#i-wallet"></use></svg></div>
       <div><%= siteName %></div>
+      <button class="nav-drawer-close" id="navDrawerClose" type="button" aria-label="关闭菜单">
+        <svg class="icon"><use href="#i-x"></use></svg>
+      </button>
     </div>
 
     <% if (ledgers && ledgers.length) { %>
@@ -94,12 +97,15 @@
 
   <main class="main">
     <header class="topbar">
+      <button class="nav-burger" id="navBurger" type="button" aria-label="打开菜单" aria-controls="sidebarNav">
+        <svg class="icon"><use href="#i-menu"></use></svg>
+      </button>
       <div style="flex:1;min-width:0">
         <h1><%= title || '' %></h1>
         <% if (typeof sub !== 'undefined' && sub) { %><div class="sub"><%= sub %></div><% } %>
       </div>
       <a class="btn btn-sm btn-icon" href="/search" title="搜索" aria-label="搜索"><svg class="icon sm"><use href="#i-search"></use></svg></a>
-      <a class="btn btn-sm btn-primary" href="/transactions/new"><svg class="icon sm"><use href="#i-plus"></use></svg>记一笔</a>
+      <a class="btn btn-sm btn-primary" href="/transactions/new"><svg class="icon sm"><use href="#i-plus"></use></svg><span class="btn-label">记一笔</span></a>
       <% if (ledger && canWrite(ledger.role)) { %>
         <button id="aiTopBtn" class="btn btn-sm btn-icon" type="button" title="AI 记账助手" aria-label="AI 记账助手"><svg class="icon sm"><use href="#i-bot"></use></svg></button>
       <% } %>
@@ -145,6 +151,8 @@
     </div>
   </main>
 </div>
+
+<div class="drawer-mask" id="drawerMask" aria-hidden="true"></div>
 
 <nav class="mobile-nav">
   <a href="/" class="<%= activeNav === 'home' ? 'active' : '' %>"><svg class="icon"><use href="#i-house"></use></svg>总览</a>
