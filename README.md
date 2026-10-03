@@ -233,15 +233,30 @@ curl -s "$BASE_URL/models" -H "Authorization: Bearer $API_KEY"
 
 **③ 开聊天**：发一张支付截图说"记一下"，或直接说"午饭 35 元"，助手会调 API 自动记账并汇报。
 
-开放 API 一览（鉴权均为 `Authorization: Bearer <令牌>`）：
+开放 API 一览（鉴权均为 `Authorization: Bearer <令牌>`；权限随令牌：读取=账本成员，写入=可写成员，站点设置=站点管理员；令牌管理不开放，跨账本不可达）：
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /api/open/ping` | 连通测试，返回账本与用户 |
-| `POST /api/open/transactions` | 直接记一笔（支持中文类型、按名称解析分类/账户、缺账户自动创建） |
-| `POST /api/open/ai/bill` | 截图 / 文字识别记账；`confirm:false` 返回草稿，`confirm:true` 直接入库 |
+| `GET /api/open/ping` | 连通测试，返回账本、角色与站点管理员标识 |
+| `POST /api/open/transactions` | 直接记一笔（支持 `transfer/lend/borrow/repay_*` 及中文类型；分类/账户按名称解析、缺账户自动创建） |
+| `GET /api/open/transactions` | 明细筛选（类型/分类/账户/成员/标签/月份/区间/关键词/分页/排序） |
+| `GET /api/open/transactions/:id` | 单笔详情（含分账与截图） |
+| `POST /api/open/transactions/:id` | 修改一笔（只传要改的字段，其余沿用） |
+| `POST /api/open/transactions/:id/delete`（或 `DELETE`）· `:id/restore` | 删除 / 恢复（软删） |
+| `POST /api/open/transactions/bulk-delete` / `bulk-category` / `bulk-tag` / `bulk-reimburse` | 批量操作（`ids` 数组） |
+| `GET /api/open/summary` · `reports/categories` · `reports/trend` | 区间汇总 / 分类构成 / 收支趋势 |
+| `GET /api/open/accounts` | 账户余额与净资产 |
+| `POST /api/open/accounts` / `:id` / `:id/archive` / `:id/delete` / `:id/adjust` | 账户增改停删与余额调整（差额自动记 adjust） |
+| `GET /api/open/categories` / `tags` · `POST /api/open/categories` / `:id` / `:id/delete` · `tags` / `:id/delete` | 分类与标签管理（系统内置分类只读） |
+| `GET /api/open/debts` · `POST /api/open/debts` / `:id/settle` / `:id/delete` | 借贷台账查询、登记、收还款核销、删除 |
+| `GET /api/open/budgets` · `POST /api/open/budgets` / `:id` / `:id/toggle` / `:id/delete` | 预算管理 |
+| `GET /api/open/goals` · `POST /api/open/goals` / `:id/deposit` / `:id/delete` | 储蓄目标（deposit 负数为取出） |
+| `GET /api/open/subscriptions` · `POST /api/open/subscriptions` / `:id` / `:id/charge` / `:id/skip` / `:id/toggle` / `:id/cancel` / `:id/delete` | 订阅扣费全生命周期 |
+| `GET /api/open/recurring` · `POST /api/open/recurring` / `:id/run` / `:id/toggle` / `:id/delete` | 周期账单管理 |
+| `POST /api/open/ai/bill` | 截图 / 文字识别记账；`confirm:false` 返回草稿，`confirm:true` 直接入库（10 次/分钟） |
 | `GET /api/open/transactions/recent?limit=10` | 最近记账（每笔含 `images`：已关联的账单截图） |
 | `GET /api/open/attachments/:id` | 取回某张账单截图（也可直接访问网页端的 `/uploads/...`） |
+| `GET /api/open/settings` · `POST /api/open/settings/site` / `settings/ai` / `settings/ai/test` · `GET /api/open/ai/models` | 设置读写与 AI 模型管理（仅站点管理员；API Key 永不回显） |
 
 **账单截图会随记录一起存档。** `confirm:true` 入库时，发来的图片会保存到附件库并关联到这批记录上
 （一图一笔则一一对应，否则整组图挂在第一笔），响应里给出对应关系：

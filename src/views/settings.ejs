@@ -184,6 +184,11 @@
     供<b>小龙虾（OpenClaw / PicoClaw）</b>、<b>Hermes Agent</b>、手机快捷指令等外部工具调用。鉴权方式：请求头带
     <span class="mono">Authorization: Bearer &lt;令牌&gt;</span>。令牌明文只在创建时展示一次，库中仅存摘要，请妥善保管。
     <div class="mt8">
+      <b>令牌权限</b>（跟随成员关系，被移出账本或禁用即失效；频控 60 次/分，AI 识别 10 次/分）：
+      读取 = 本账本所有成员；写入（交易/转账/借贷/账户/分类/标签/预算/目标/订阅/周期账单）= 可写成员；站点与 AI 设置 = 站点管理员。
+      <b>不开放</b>：令牌管理、跨账本访问、读取任何密钥明文。
+    </div>
+    <div class="mt8">
       <b>AI 助手接入（自动记账技能）</b>：
       <ul style="margin:4px 0 0;padding-left:18px;line-height:1.9">
         <li><b>Hermes Agent</b>：把仓库 <span class="mono">skills/homeledger-bookkeeping/</span> 整个目录复制到 <span class="mono">~/.hermes/skills/</span> 下（或放进你的技能仓库），在对话里 <span class="mono">/homeledger-bookkeeping</span> 或直接发截图/说"午饭 35"即可记账；技能读 <span class="mono">HOMELEDGER_URL</span> 与 <span class="mono">HOMELEDGER_TOKEN</span> 两个环境变量。</li>
