@@ -660,7 +660,7 @@ router.get('/backup/db', auth.requireLogin, auth.requireAdmin, (req, res, next) 
   }
 });
 
-/** 恢复：保存上传文件并替换数据库（需重启容器生效） */
+/** 恢复：接收上传的 SQLite 数据库，安全备份当前数据后热切换连接，无需重启容器 */
 router.post('/backup/restore', auth.requireLogin, auth.requireAdmin, (req, res) => {
   // 前端 fetch 上传时带 Accept: application/json —— 必须回 JSON，
   // 否则 fetch 跟随 302 重定向拿到 HTML，res.json() 解析失败误报"服务器返回异常"
@@ -677,13 +677,48 @@ router.post('/backup/restore', auth.requireLogin, auth.requireAdmin, (req, res) 
     if (buf.length < 100 || buf.slice(0, 15).toString('utf8') !== 'SQLite format 3') {
       return done(false, '文件不是有效的 SQLite 数据库');
     }
+
+    // 安全备份当前数据
     const safety = path.join(DATA_DIR, `pre-restore-${Date.now()}.db`);
-    fs.copyFileSync(DB_FILE, safety);
-    fs.writeFileSync(path.join(DATA_DIR, 'restore-pending.db'), buf);
-    fs.writeFileSync(path.join(DATA_DIR, 'RESTORE-PENDING.txt'),
-      `已上传待恢复数据库，时间 ${nowStr()}\n当前数据已备份为：${path.basename(safety)}\n\n恢复方法：\n1) 停止容器；\n2) 把 restore-pending.db 改名为 homeledger.db 覆盖原文件（同时删除 homeledger.db-wal / -shm）；\n3) 启动容器。\n`);
-    auth.audit(req, 'backup.restore_upload', { detail: `备份于 ${path.basename(safety)}` });
-    return done(true, `已接收备份文件并做好安全备份（${path.basename(safety)}）。请按 data 目录下 RESTORE-PENDING.txt 的说明完成恢复。`);
+    try { fs.copyFileSync(DB_FILE, safety); } catch { /* 首次启动可能无旧库 */ }
+
+    // 一致性校验：用独立连接打开上传文件
+    const tmpCheck = path.join(DATA_DIR, `restore-check-${Date.now()}.db`);
+    fs.writeFileSync(tmpCheck, buf);
+    try {
+      const { DatabaseSync } = require('node:sqlite');
+      const checkDb = new DatabaseSync(tmpCheck);
+      checkDb.exec('PRAGMA integrity_check');
+      const hasUsers = checkDb.prepare("SELECT COUNT(*) AS c FROM sqlite_master WHERE type='table' AND name='users'").get();
+      checkDb.close();
+      fs.unlinkSync(tmpCheck);
+      if (!hasUsers || !hasUsers.c) return done(false, '文件缺少 users 表，不是家账簿数据库');
+    } catch (e) {
+      try { fs.unlinkSync(tmpCheck); } catch { /* ignore */ }
+      return done(false, '上传的文件无法打开：' + e.message);
+    }
+
+    // 写入新文件 → 关闭旧连接 → 替换主库文件 → 热切换连接
+    const newPath = path.join(DATA_DIR, 'restore-new.db');
+    fs.writeFileSync(newPath, buf);
+    const { reopenDatabase } = require('../db');
+    try { DB.close(); } catch { /* ignore */ }
+    for (const suffix of ['-wal', '-shm']) {
+      try { fs.unlinkSync(DB_FILE + suffix); } catch { /* ignore */ }
+    }
+    fs.renameSync(newPath, DB_FILE);
+    reopenDatabase();
+
+    // 恢复后当前登录会话已不存在（sessions 表被替换），需重新登录
+    try { req.session.destroy(() => {}); } catch { /* ignore */ }
+    auth.audit(req, 'backup.restore', { detail: `安全备份：${path.basename(safety)}` });
+
+    // wantsJson 时 session 可能已被 destroy，不能再 flash；直接 JSON 返回
+    if (wantsJson) {
+      return res.json({ ok: true, message: `恢复完成！原数据已备份为 ${path.basename(safety)}。页面即将刷新，请重新登录。`, reload: true });
+    }
+    res.flash('success', `恢复完成！原数据已备份为 ${path.basename(safety)}。`);
+    res.redirect('/login');
   } catch (e) {
     return done(false, '恢复失败：' + e.message);
   }

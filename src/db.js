@@ -13,10 +13,29 @@ const DB_FILE = path.join(DATA_DIR, 'homeledger.db');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(path.join(DATA_DIR, 'uploads'), { recursive: true });
 
-const db = new DatabaseSync(DB_FILE);
+let db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 db.exec('PRAGMA busy_timeout = 5000;');
+
+/**
+ * 关闭当前连接并重新打开（用于备份恢复：文件被外部替换后调用此函数刷新连接）。
+ * 清空预编译语句缓存（旧语句绑定在旧连接上）并重跑初始化。
+ */
+function reopenDatabase() {
+  try { db.close(); } catch { /* ignore */ }
+  // 清理 WAL/SHM 残留（旧连接的写入已通过 WAL checkpoint 合并或随 close 丢弃）
+  for (const suffix of ['-wal', '-shm']) {
+    try { fs.unlinkSync(DB_FILE + suffix); } catch { /* ignore */ }
+  }
+  db = new DatabaseSync(DB_FILE);
+  db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA foreign_keys = ON;');
+  db.exec('PRAGMA busy_timeout = 5000;');
+  cache.clear();
+  initialized = false;
+  init();
+}
 
 /* ---------------------------------- 小工具 --------------------------------- */
 
@@ -707,7 +726,7 @@ function init() {
 module.exports = {
   db, all, get, run, tx, prep,
   DATA_DIR, DB_FILE, nowStr, todayStr, B, N,
-  tableColumns, ensureColumn,
+  tableColumns, ensureColumn, reopenDatabase,
   ACCOUNT_TYPES, ACCOUNT_TYPE_MAP,
   TXN_TYPES, TXN_TYPE_MAP, PRIMARY_TXN_TYPES,
   getSetting, setSetting, allSettings,
