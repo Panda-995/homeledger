@@ -894,7 +894,8 @@
 
   function initDatePickers() {
     if (isTouch()) return;
-    $('input[type="date"], input[type="month"]').forEach(initDatePicker);
+    // 注意是 $$（全部）：此前误写成 $（单个），导致每页只有第一个日期输入被增强
+    $$('input[type="date"], input[type="month"]').forEach(initDatePicker);
   }
 
   function initDatePicker(input) {
