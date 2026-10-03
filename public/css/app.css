@@ -1225,3 +1225,83 @@ html { scroll-behavior: smooth; }
   outline: none;
   box-shadow: 0 0 0 3.5px var(--primary-ring);
 }
+
+/* ============================================================
+   v1.5.1：自定义日期选择器（桌面端；触屏保留原生）
+   ============================================================ */
+
+.hl-date { position: relative; display: block; width: 100%; }
+.hl-date-trigger {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 12px; min-height: 36px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--card); color: var(--text);
+  font-size: 14px; font-family: var(--font); line-height: 1.45;
+  cursor: pointer; text-align: left;
+  transition: color .15s ease-in-out, background-color .15s ease-in-out,
+    border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+.hl-date-trigger .icon { color: var(--muted); }
+.hl-date-trigger:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border-strong)); }
+.hl-date.open .hl-date-trigger, .hl-date-trigger:focus-visible {
+  border-color: var(--primary); box-shadow: 0 0 0 3.5px var(--primary-ring);
+}
+.hl-date-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-date-label.ph { color: var(--faint); }
+
+.hl-date-menu {
+  display: none;
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 95;
+  width: 282px; max-width: calc(100vw - 24px);
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 13px; box-shadow: var(--shadow-lg);
+  padding: 10px;
+  animation: popIn .14s ease;
+}
+.hl-date.open .hl-date-menu { display: block; }
+.hl-date-menu.up { top: auto; bottom: calc(100% + 6px); }
+.hl-date-menu.right { left: auto; right: 0; }
+
+.hl-date-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.hl-date-title { flex: 1; text-align: center; font-weight: 650; font-size: 13.5px; }
+.hl-date-nav {
+  display: grid; place-items: center; width: 30px; height: 30px;
+  border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--muted);
+  cursor: pointer;
+  transition: background-color .12s ease-in-out, color .12s ease-in-out;
+}
+.hl-date-nav:hover { background: var(--card-2); color: var(--text); }
+
+.hl-date-week {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 2px;
+}
+.hl-date-week span {
+  text-align: center; font-size: 11px; color: var(--faint); font-weight: 600; padding: 3px 0;
+}
+.hl-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.hl-date-cell {
+  display: grid; place-items: center; height: 32px;
+  border: 0; border-radius: 8px; background: transparent;
+  color: var(--text); font-size: 13px; font-family: var(--font);
+  cursor: pointer; font-variant-numeric: tabular-nums;
+  transition: background-color .1s ease-in-out, color .1s ease-in-out;
+}
+.hl-date-cell:hover { background: var(--card-2); }
+.hl-date-cell.blank { pointer-events: none; }
+.hl-date-cell.today { color: var(--primary); font-weight: 650; }
+.hl-date-cell.selected {
+  background: var(--primary); color: #fff; font-weight: 650;
+  box-shadow: 0 2px 8px -2px var(--primary-ring);
+}
+.hl-date-cell.selected:hover { background: var(--primary-deep); }
+
+.hl-date-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.hl-date-act {
+  padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--card); color: var(--text-2); font-size: 12.5px; font-family: var(--font);
+  cursor: pointer;
+  transition: background-color .12s ease-in-out, color .12s ease-in-out, border-color .12s ease-in-out;
+}
+.hl-date-act:hover { background: var(--primary-soft); color: var(--primary); border-color: transparent; }
+
+/* 无 JS 回退：触屏/未增强时原生 input 已有全局样式，无需额外处理 */

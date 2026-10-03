@@ -870,6 +870,166 @@
     });
   }
 
+  /* ==================== 自定义日期选择器（桌面端，风格对齐 hl-select） ==================== */
+  /* 触屏设备保留原生日期滚轮（移动端最佳交互），桌面端替换为与项目一致的日历弹层 */
+  const DATE_DOW = ['一', '二', '三', '四', '五', '六', '日'];
+  const pad2 = (n) => String(n).padStart(2, '0');
+
+  function initDatePickers() {
+    if (isTouch()) return;
+    $$('input[type="date"]').forEach(initDatePicker);
+  }
+
+  function initDatePicker(input) {
+    if (input.dataset.hlDate) return;
+    input.dataset.hlDate = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'hl-date';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    input.classList.add('hidden');
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'hl-date-trigger';
+    btn.setAttribute('aria-haspopup', 'dialog');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<svg class="icon sm"><use href="#i-calendar-days"></use></svg><span class="hl-date-label"></span>';
+    wrap.appendChild(btn);
+    const labelEl = $('.hl-date-label', btn);
+
+    let open = false;
+    let menu = null;
+    let vy = 0, vm = 0; // 面板正在浏览的年/月
+
+    const fmt = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    const parse = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s || '') ? new Date(s + 'T00:00:00') : null);
+    const today = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+
+    function renderLabel() {
+      labelEl.textContent = input.value || '选择日期';
+      labelEl.classList.toggle('ph', !input.value);
+    }
+
+    function ensureMenu() {
+      if (menu) return menu;
+      menu = document.createElement('div');
+      menu.className = 'hl-date-menu';
+      menu.setAttribute('role', 'dialog');
+      // 面板内点击：选日期 / 翻月 / 今天 / 清除（menu 懒创建，监听必须在这里挂）
+      menu.addEventListener('click', (e) => {
+        const day = e.target.closest('[data-day]');
+        if (day) return pick(day.dataset.day);
+        const nav = e.target.closest('[data-nav]');
+        if (nav) {
+          vm += Number(nav.dataset.nav);
+          if (vm > 12) { vm = 1; vy++; }
+          if (vm < 1) { vm = 12; vy--; }
+          return renderPanel();
+        }
+        if (e.target.closest('[data-today]')) {
+          const d = today(); vy = d.getFullYear(); vm = d.getMonth() + 1;
+          renderPanel();
+          return pick(fmt(d));
+        }
+        if (e.target.closest('[data-clear]')) {
+          input.value = '';
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          renderLabel();
+          toggle(false);
+          btn.focus();
+        }
+      });
+      wrap.appendChild(menu);
+      return menu;
+    }
+
+    function renderPanel() {
+      const sel = input.value;
+      const tStr = fmt(today());
+      const offset = (new Date(vy, vm - 1, 1).getDay() + 6) % 7; // 周一为一周开始
+      const days = new Date(vy, vm, 0).getDate();
+      let cells = '';
+      for (let i = 0; i < offset; i++) cells += '<span class="hl-date-cell blank"></span>';
+      for (let d = 1; d <= days; d++) {
+        const ds = vy + '-' + pad2(vm) + '-' + pad2(d);
+        const cls = 'hl-date-cell' + (ds === sel ? ' selected' : '') + (ds === tStr ? ' today' : '');
+        cells += '<button type="button" class="' + cls + '" data-day="' + ds + '">' + d + '</button>';
+      }
+      menu.innerHTML =
+        '<div class="hl-date-head">' +
+          '<button type="button" class="hl-date-nav" data-nav="-1" aria-label="上个月"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></button>' +
+          '<span class="hl-date-title">' + vy + ' 年 ' + vm + ' 月</span>' +
+          '<button type="button" class="hl-date-nav" data-nav="1" aria-label="下个月"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></button>' +
+        '</div>' +
+        '<div class="hl-date-week">' + DATE_DOW.map((d) => '<span>' + d + '</span>').join('') + '</div>' +
+        '<div class="hl-date-grid">' + cells + '</div>' +
+        '<div class="hl-date-foot">' +
+          '<button type="button" class="hl-date-act" data-clear>清除</button>' +
+          '<span class="spacer"></span>' +
+          '<button type="button" class="hl-date-act" data-today>今天</button>' +
+        '</div>';
+    }
+
+    function place() {
+      menu.classList.remove('up', 'right');
+      const r = wrap.getBoundingClientRect();
+      if (window.innerHeight - r.bottom < 340 && r.top > 340) menu.classList.add('up');
+      if (r.left + 280 > window.innerWidth - 8) menu.classList.add('right');
+    }
+
+    function toggle(force) {
+      const want = force === undefined ? !open : force;
+      if (want === open) return;
+      open = want;
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        $$('.hl-date.open').forEach((w) => {
+          if (w !== wrap) {
+            w.classList.remove('open');
+            const b = $('.hl-date-trigger', w);
+            if (b) b.setAttribute('aria-expanded', 'false');
+          }
+        });
+        const base = parse(input.value) || today();
+        vy = base.getFullYear(); vm = base.getMonth() + 1;
+        ensureMenu();
+        renderPanel();
+        wrap.classList.add('open');
+        place();
+      } else {
+        wrap.classList.remove('open');
+      }
+    }
+
+    function pick(dateStr) {
+      input.value = dateStr;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      renderLabel();
+      toggle(false);
+      btn.focus();
+    }
+
+    btn.addEventListener('click', () => toggle());
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { e.preventDefault(); toggle(false); } });
+
+    // 外部点击关闭（独立委托单例，避免逐实例挂监听）
+    if (!document._hlDateDelegated) {
+      document._hlDateDelegated = true;
+      document.addEventListener('click', (e) => {
+        $$('.hl-date.open').forEach((w) => {
+          if (!w.contains(e.target)) {
+            w.classList.remove('open');
+            const b = $('.hl-date-trigger', w);
+            if (b) b.setAttribute('aria-expanded', 'false');
+          }
+        });
+      });
+    }
+
+    renderLabel();
+  }
+
   /* ============================ 侧栏滚动记忆 ============================ */
   function initSidebar() {
     const sb = document.querySelector('.sidebar');
@@ -980,6 +1140,7 @@
     initLightbox();
     initListActions();
     initNumberInputs();
+    initDatePickers();
     enhanceSelects();
     // 记一笔/编辑页本身就是记账界面，AI 悬浮球会遮挡底部按钮，不出现
     if ($('#txn-form')) { const f = $('#aiFab'); if (f) f.remove(); }

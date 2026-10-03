@@ -20,7 +20,7 @@ const ICONS = [
   'credit-card', 'target', 'repeat', 'receipt', 'users-round', 'piggy-bank',
   'tag', 'tags', 'download', 'upload', 'library', 'bell', 'settings', 'info',
   'sun', 'moon', 'plus', 'user-round', 'log-out', 'trash-2', 'x', 'paperclip',
-  'send', 'camera', 'sparkles', 'chevron-down', 'check', 'chevron-right',
+  'send', 'camera', 'sparkles', 'chevron-down', 'check', 'chevron-left', 'chevron-right',
   'triangle-alert', 'external-link', 'wallet', 'key-round', 'plug',
   'refresh-cw', 'arrow-left-right', 'hand-coins', 'trending-up', 'trending-down',
   'chart-pie', 'filter', 'eye', 'lock', 'scale', 'banknote', 'image',
