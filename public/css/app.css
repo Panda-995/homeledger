@@ -1171,3 +1171,57 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
   .txn-title > span:not(.note) { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 }
 .hl-select-menu.right { left: auto; right: 0; }
+
+/* 交易分类名可点击筛选（纯交互：既有数据变导航入口） */
+a.txn-cat { color: inherit; transition: color .12s; }
+a.txn-cat:hover { color: var(--primary); }
+
+/* ============================================================
+   v1.5.0 UI/交互打磨（基于 Bootstrap / Tabler / shadcn 令牌研究）
+   只动视觉与交互，不加功能
+   ============================================================ */
+
+:root { --ease: cubic-bezier(.4, 0, .2, 1); }  /* Material 标准曲线 */
+
+/* 统一过渡：颜色类 .15s ease-in-out（Bootstrap 组件基准） */
+.btn, .chip, .nav-item, .tabs a, .pager a, .pager span,
+.type-tabs a, .type-tabs button, .hl-select-trigger, .user-menu-btn,
+.nav-burger, .ai-icon-btn, .ai-send, .thumb button, .ai-thumbs .t button {
+  transition: color .15s ease-in-out, background-color .15s ease-in-out,
+    border-color .15s ease-in-out, box-shadow .15s ease-in-out, transform .1s var(--ease);
+}
+
+/* 行悬停背景过渡（明细行 / 表格行 / 下拉选项） */
+.txn, .table td, .cat-item, .gallery figure { transition: background-color .12s ease-in-out, border-color .12s ease-in-out, box-shadow .12s ease-in-out; }
+
+/* 主题切换平滑：主要容器背景/边框颜色过渡，避免切换闪变 */
+body, .card, .sidebar, .topbar, .mobile-nav, .stat, .notice, .flash {
+  transition: background-color .2s ease-in-out, border-color .2s ease-in-out;
+}
+
+/* 按压反馈统一（按钮已有 scale，补齐 chips/分页/页签/摘要行） */
+.chip:active, .pager a:active, .type-tabs a:active, .type-tabs button:active,
+.user-menu-item:active, .user-menu-btn:active { transform: scale(.96); }
+.chip, .user-menu-item, .palette-item, .hl-select-opt, .cat-parent { transition: transform .1s var(--ease), background-color .12s ease-in-out, color .12s ease-in-out, border-color .12s ease-in-out; }
+
+/* 平滑滚动（受全局 reduced-motion 约束） */
+html { scroll-behavior: smooth; }
+
+/* 悬停设备：侧栏图标轻微位移，主次分明 */
+@media (hover: hover) {
+  .nav-item .icon { transition: transform .15s var(--ease); }
+  .nav-item:hover .icon { transform: translateX(1.5px); }
+}
+
+/* 正文链接悬停下划线偏移（可访问性基线） */
+.content a { text-underline-offset: 3px; }
+
+/* 抽屉滑入用标准曲线 */
+.sidebar { transition: transform .22s var(--ease), box-shadow .22s var(--ease); }
+
+/* 键盘焦点环统一为 3.5px 主色（与输入框一致，覆盖默认 2px outline） */
+.chip:focus-visible, .pager a:focus-visible, .nav-item:focus-visible,
+.hl-select-opt:focus-visible, .user-menu-item:focus-visible, .palette-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3.5px var(--primary-ring);
+}

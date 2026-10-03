@@ -29,7 +29,12 @@
           <div class="txn-ico" style="background:<%= t.category_color ? t.category_color + '18' : 'var(--card-2)' %>"><%= t.category_icon || t.type_icon %></div>
           <div class="txn-main">
             <div class="txn-title">
-              <span><%= t.type === 'transfer' ? '转账' : (t.category_name || t.type_label) %></span>
+              <% if (t.category_id && t.type !== 'transfer') { %>
+                <%# 点分类名即按该分类筛选（transfers 无分类语义，保持纯文本） %>
+                <a class="txn-cat" href="/transactions?category_id=<%= t.category_id %>" title="查看该分类的全部记录"><%= t.category_name || t.type_label %></a>
+              <% } else { %>
+                <span><%= t.type === 'transfer' ? '转账' : (t.category_name || t.type_label) %></span>
+              <% } %>
               <% if (t.category_parent && t.type !== 'transfer') { %><span class="tiny muted"><%= t.category_parent %></span><% } %>
               <% if (t.merchant) { %><span class="note"><%= t.merchant %></span>
               <% } else if (t.note) { %><span class="note"><%= t.note %></span><% } %>
@@ -55,9 +60,9 @@
               <% if (t.source === 'subscription') { %><span class="chip primary">订阅</span><% } %>
             </div>
           </div>
-          <div class="txn-amt amount <%= t.type === 'income' ? 'income' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? 'neutral' : 'expense') %>">
+          <div class="txn-amt amount <%= t.type === 'income' ? 'income' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' || t.type === 'adjust' ? 'neutral' : 'expense') %>">
             <% if (t.type === 'adjust') { %>
-              <%# 余额调整金额自带符号（调减为负），不加前后缀 %>
+              <%# 余额调整金额自带符号（调减为负），不加前后缀，用中性色 %>
               <%= helpers.fmtAmount(t.amount_cents) %>
             <% } else { %>
               <%= (t.type === 'income' ? '+' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? '' : '-')) %><%= helpers.fmtAmount(t.amount_cents) %>
