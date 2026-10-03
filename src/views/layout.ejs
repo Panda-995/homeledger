@@ -41,7 +41,7 @@
       <div class="nav-group">
         <div class="nav-title">记账</div>
         <a class="nav-item <%= activeNav === 'home' ? 'active' : '' %>" href="/"><svg class="icon"><use href="#i-house"></use></svg>总览</a>
-        <a class="nav-item <%= activeNav === 'new' ? 'active' : '' %>" href="/transactions/new"><svg class="icon"><use href="#i-pencil"></use></svg>记一笔</a>
+        <% if (canWrite(ledger.role)) { %><a class="nav-item <%= activeNav === 'new' ? 'active' : '' %>" href="/transactions/new"><svg class="icon"><use href="#i-pencil"></use></svg>记一笔</a><% } %>
         <a class="nav-item <%= activeNav === 'transactions' ? 'active' : '' %>" href="/transactions"><svg class="icon"><use href="#i-list"></use></svg>账单明细</a>
         <a class="nav-item <%= activeNav === 'calendar' ? 'active' : '' %>" href="/calendar"><svg class="icon"><use href="#i-calendar-days"></use></svg>记账日历</a>
         <a class="nav-item <%= activeNav === 'ai' ? 'active' : '' %>" href="/ai"><svg class="icon"><use href="#i-bot"></use></svg>AI 截图记账</a>
@@ -67,7 +67,7 @@
         <div class="nav-title">数据</div>
         <a class="nav-item <%= activeNav === 'categories' ? 'active' : '' %>" href="/categories"><svg class="icon"><use href="#i-tag"></use></svg>分类管理</a>
         <a class="nav-item <%= activeNav === 'tags' ? 'active' : '' %>" href="/tags"><svg class="icon"><use href="#i-tags"></use></svg>标签管理</a>
-        <a class="nav-item <%= activeNav === 'import' ? 'active' : '' %>" href="/import"><svg class="icon"><use href="#i-download"></use></svg>账单导入</a>
+        <% if (canWrite(ledger.role)) { %><a class="nav-item <%= activeNav === 'import' ? 'active' : '' %>" href="/import"><svg class="icon"><use href="#i-download"></use></svg>账单导入</a><% } %>
         <a class="nav-item <%= activeNav === 'export' ? 'active' : '' %>" href="/export"><svg class="icon"><use href="#i-upload"></use></svg>导出备份</a>
       </div>
 
@@ -105,7 +105,7 @@
         <% if (typeof sub !== 'undefined' && sub) { %><div class="sub"><%= sub %></div><% } %>
       </div>
       <a class="btn btn-sm btn-icon" href="/search" title="搜索" aria-label="搜索"><svg class="icon sm"><use href="#i-search"></use></svg></a>
-      <a class="btn btn-sm btn-primary" href="/transactions/new" aria-label="记一笔"><svg class="icon sm"><use href="#i-plus"></use></svg><span class="btn-label">记一笔</span></a>
+      <% if (canWrite(ledger.role)) { %><a class="btn btn-sm btn-primary" href="/transactions/new" aria-label="记一笔"><svg class="icon sm"><use href="#i-plus"></use></svg><span class="btn-label">记一笔</span></a><% } %>
       <% if (ledger && canWrite(ledger.role)) { %>
         <button id="aiTopBtn" class="btn btn-sm btn-icon" type="button" title="AI 记账助手" aria-label="AI 记账助手"><svg class="icon sm"><use href="#i-bot"></use></svg></button>
       <% } %>

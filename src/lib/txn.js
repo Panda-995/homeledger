@@ -32,8 +32,10 @@ function decorate(t) {
   t.type_color = TXN_TYPE_MAP[t.type]?.color || '#8c8c8c';
   t.flow = TXN_TYPE_MAP[t.type]?.flow || 'out';
   t.category_path = t.category_parent ? `${t.category_parent}/${t.category_name}` : (t.category_name || '未分类');
-  t.is_income = INCOME_TYPES.includes(t.type);
-  t.is_expense = EXPENSE_TYPES.includes(t.type);
+  // is_income/is_expense = 余额方向（供 UI 符号/配色用，含借入/收还款等入出账类型），
+  // 统计口径仍以 INCOME_TYPES/EXPENSE_TYPES 为准（borrow 等不计收支）
+  t.is_income = INCOME_TYPES.includes(t.type) || ['repay_receive', 'borrow'].includes(t.type);
+  t.is_expense = EXPENSE_TYPES.includes(t.type) || ['lend', 'repay_pay'].includes(t.type);
   return t;
 }
 
@@ -177,6 +179,9 @@ function createTransaction(ledgerId, userId, d) {
   if (isAdjust && !accountId) throw new Error('余额调整需要指定账户');
   if (type === 'transfer' && (!accountId || !toAccountId)) throw new Error('转账需要选择转出与转入账户');
   if (type === 'transfer' && accountId === toAccountId) throw new Error('转出与转入账户不能相同');
+  // 投资买卖同样是双边交易：缺转入/转出账户会导致资金凭空蒸发或净效果为 0
+  if ((type === 'invest_buy' || type === 'invest_sell') && (!accountId || !toAccountId)) throw new Error('投资买入/卖出需要选择付款与入账账户');
+  if ((type === 'invest_buy' || type === 'invest_sell') && accountId === toAccountId) throw new Error('投资交易的双方账户不能相同');
 
   const txnDate = /^\d{4}-\d{2}-\d{2}$/.test(String(d.txn_date || '')) ? d.txn_date : todayStr();
   const info = run(
@@ -269,6 +274,7 @@ function markReimbursed(ids, ledgerId, userId, accountId) {
   const rows = all(
     `SELECT * FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL
        AND is_reimbursable = 1 AND reimbursed_at IS NULL
+       AND type IN ('expense', 'fee')
        AND id IN (${ids.map(() => '?').join(',')})`,
     ledgerId, ...ids
   );

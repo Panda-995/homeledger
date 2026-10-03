@@ -60,12 +60,17 @@
               <% if (t.source === 'subscription') { %><span class="chip primary">订阅</span><% } %>
             </div>
           </div>
-          <div class="txn-amt amount <%= t.type === 'income' ? 'income' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' || t.type === 'adjust' ? 'neutral' : 'expense') %>">
+          <%# 金额符号与配色统一用后端口径（decorate 提供 is_income/is_expense/flow）：
+              入账类（income/refund/reimburse/interest/repay_receive/borrow）→ + 绿色；
+              流出类（expense/fee/lend/repay_pay）→ - 红色；
+              搬移类（transfer/invest_*/adjust）→ 无符号中性，adjust 自带正负号 %>
+          <div class="txn-amt amount <%= t.type === 'adjust' ? 'neutral' : (t.is_income ? 'income' : (t.is_expense ? 'expense' : 'neutral')) %>">
             <% if (t.type === 'adjust') { %>
-              <%# 余额调整金额自带符号（调减为负），不加前后缀，用中性色 %>
               <%= helpers.fmtAmount(t.amount_cents) %>
-            <% } else { %>
-              <%= (t.type === 'income' ? '+' : (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell' ? '' : '-')) %><%= helpers.fmtAmount(t.amount_cents) %>
+            <% } else if (t.is_income) { %>
+              +<%= helpers.fmtAmount(t.amount_cents) %>
+            <% } else if (t.is_expense) { %>
+              -<%= helpers.fmtAmount(t.amount_cents) %>
             <% } %>
             <% if (t.currency !== 'CNY') { %><div class="tiny muted"><%= t.currency %></div><% } %>
           </div>

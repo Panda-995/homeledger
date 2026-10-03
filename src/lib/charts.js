@@ -270,4 +270,4 @@ function progressBar(used, total, { color = C.primary, height = 8, warn = false 
   return `<div class="progress" style="height:${height}px"><i style="width:${p.toFixed(1)}%;background:${c}"></i></div>`;
 }
 
-module.exports = { barChart, lineChart, donutChart, donutLegend, rankBars, calendarHeatmap, progressBar, niceMax };
+module.exports = { barChart, lineChart, donutChart, donutLegend, rankBars, calendarHeatmap, progressBar };

@@ -58,9 +58,12 @@
   </div>
   <% if (result.pages > 1) { %>
     <div class="pager">
-      <% if (result.page > 1) { %><a href="/search?q=<%= encodeURIComponent(f.keyword) %>&type=<%= f.type %>&page=<%= result.page - 1 %>">上一页</a><% } %>
+      <%# 翻页保留全部筛选条件（此前只带 q/type，第 2 页筛选会静默丢失） %>
+      <% var keepers = [['q', f.keyword], ['type', f.type], ['category_id', f.categoryId], ['account_id', f.accountId], ['member_id', f.memberId], ['source', f.source], ['from', f.from], ['to', f.to], ['min', f.minCents ? helpers.fmtAmount(f.minCents) : ''], ['max', f.maxCents ? helpers.fmtAmount(f.maxCents) : ''], ['sort', f.sort]]; %>
+      <% var keepQs = keepers.filter(function(k){ return k[1] !== '' && k[1] !== null && k[1] !== undefined; }).map(function(k){ return encodeURIComponent(k[0]) + '=' + encodeURIComponent(k[1]); }).join('&'); %>
+      <% if (result.page > 1) { %><a href="/search?<%= keepQs %>&page=<%= result.page - 1 %>">上一页</a><% } %>
       <span class="cur"><%= result.page %> / <%= result.pages %></span>
-      <% if (result.page < result.pages) { %><a href="/search?q=<%= encodeURIComponent(f.keyword) %>&type=<%= f.type %>&page=<%= result.page + 1 %>">下一页</a><% } %>
+      <% if (result.page < result.pages) { %><a href="/search?<%= keepQs %>&page=<%= result.page + 1 %>">下一页</a><% } %>
     </div>
   <% } %>
 <% } else { %>

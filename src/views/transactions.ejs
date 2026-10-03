@@ -91,7 +91,7 @@
   </div>
 </div>
 
-<form id="bulk-form" method="post" action="/transactions/bulk">
+<form id="bulk-form" method="post" action="/transactions/bulk" data-confirm="确认对勾选的记录执行该操作？删除操作可稍后在筛选中恢复。">
   <input type="hidden" name="_csrf" value="<%= csrf %>">
   <input type="hidden" name="back" value="<%= path + qs({}) %>">
   <div class="card">

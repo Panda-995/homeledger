@@ -72,8 +72,8 @@
               </div>
             </div>
             <div class="right">
-              <div class="amount expense" style="font-size:18px"><%= helpers.fmtAmount(it.amount_cents) %></div>
-              <div class="tiny muted"><%= it.cycleLabel %> · 月均 <%= helpers.fmtAmount(it.monthly_cents) %></div>
+              <div class="amount expense" style="font-size:18px"><%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.amount_cents) %></div>
+              <div class="tiny muted"><%= it.cycleLabel %> · 月均 <%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.monthly_cents) %></div>
             </div>
           </div>
 
@@ -90,10 +90,12 @@
           <% if (it.note) { %><div class="tiny muted mt8">📝 <%= it.note %></div><% } %>
 
           <div class="row tiny mt12" style="gap:12px;flex-wrap:wrap">
+            <% if (it.status !== 'canceled') { %>
             <form method="post" action="/subscriptions/<%= it.id %>/charge" style="display:inline">
               <input type="hidden" name="_csrf" value="<%= csrf %>">
               <button class="btn btn-sm" style="padding:2px 8px;font-size:11px">立即扣费一期</button>
             </form>
+            <% } %>
             <% if (it.status !== 'canceled') { %>
             <form method="post" action="/subscriptions/<%= it.id %>/skip" style="display:inline">
               <input type="hidden" name="_csrf" value="<%= csrf %>">

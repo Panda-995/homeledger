@@ -217,7 +217,7 @@
           <td><a href="/accounts/<%= a.id %>"><%= a.icon %> <%= a.name %></a></td>
           <td class="muted small"><%= (ACCOUNT_TYPE_MAP[a.type] || {}).label || a.type %></td>
           <td class="num amount <%= Number(a.balance_cents) < 0 ? 'expense' : '' %>"><%= helpers.money(a.balance_cents, a.currency) %></td>
-          <td class="num muted"><%= helpers.fmtAmount(a.initial_cents) %></td>
+          <td class="num muted"><%= helpers.money(a.initial_cents, a.currency) %></td>
           <td class="num muted"><%= ((Math.abs(Number(a.balance_cents)) / netAbs) * 100).toFixed(1) %>%</td>
         </tr>
       <% }); %>

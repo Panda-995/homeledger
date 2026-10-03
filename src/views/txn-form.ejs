@@ -57,7 +57,7 @@
         <div class="field">
           <label>金额</label>
           <div class="amount-input">
-            <span class="cur">¥</span>
+            <span class="cur" id="cur-symbol">¥</span>
             <input type="text" name="amount" id="f-amount" inputmode="decimal" value="<%= amountValue %>" placeholder="0.00" required autocomplete="off">
           </div>
         </div>
@@ -129,7 +129,7 @@
           <div class="row wrap" style="gap:12px">
             <div class="field" style="flex:1;min-width:120px">
               <label>币种</label>
-              <select name="currency">
+              <select name="currency" id="f-currency">
                 <% ['CNY','USD','EUR','HKD','JPY','GBP','KRW','SGD','AUD','CAD','TWD'].forEach(function(c){ %>
                   <option value="<%= c %>" <%= t.currency === c ? 'selected' : '' %>><%= c %></option>
                 <% }); %>

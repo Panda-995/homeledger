@@ -860,6 +860,17 @@
     });
   }
 
+  /* ============================ 币种符号联动 ============================ */
+  /* 记一笔表单切换币种时，金额前缀符号同步（¥/$/€…），避免"USD 金额前挂 ¥"的错位感 */
+  function initCurrencySymbol() {
+    const curSel = $('#f-currency');
+    if (!curSel) return;
+    const SYM = { CNY: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥', HKD: 'HK$', KRW: '₩', SGD: 'S$', AUD: 'A$', CAD: 'C$', TWD: 'NT$' };
+    const apply = () => { const el = $('#cur-symbol'); if (el) el.textContent = SYM[curSel.value] || '¤'; };
+    curSel.addEventListener('change', apply);
+    apply();
+  }
+
   /* ============================ 数字输入美化 ============================ */
   function initNumberInputs() {
     $$('input[inputmode="decimal"]').forEach((inp) => {
@@ -1011,7 +1022,7 @@
     }
 
     btn.addEventListener('click', () => toggle());
-    btn.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { e.preventDefault(); toggle(false); } });
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Escape' && open) { e.preventDefault(); toggle(false); } });
 
     // 外部点击关闭（独立委托单例，避免逐实例挂监听）
     if (!document._hlDateDelegated) {
@@ -1141,6 +1152,7 @@
     initListActions();
     initNumberInputs();
     initDatePickers();
+    initCurrencySymbol();
     enhanceSelects();
     // 记一笔/编辑页本身就是记账界面，AI 悬浮球会遮挡底部按钮，不出现
     if ($('#txn-form')) { const f = $('#aiFab'); if (f) f.remove(); }

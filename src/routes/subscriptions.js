@@ -150,6 +150,8 @@ router.post('/subscriptions/:id/charge', auth.requireLogin, auth.requireLedgerWr
   const ledgerId = Number(res.locals.ledger.id);
   const sub = get('SELECT * FROM subscriptions WHERE id = ? AND ledger_id = ?', Number(req.params.id), ledgerId);
   if (!sub) { res.flash('error', '订阅不存在'); return res.redirect('/subscriptions'); }
+  // 已取消/已暂停的订阅不自动扣费，手动扣费也应有明确意图（先恢复订阅）
+  if (sub.status === 'canceled') { res.flash('error', '该订阅已取消，请先恢复订阅再扣费'); return res.redirect('/subscriptions'); }
   const txnId = subs.charge(sub, req.session.userId, { date: DAY_RE.test(String(req.body.date || '')) ? req.body.date : todayStr() });
   if (!txnId) { res.flash('error', '订阅金额为 0，无法记账'); return res.redirect('/subscriptions'); }
   // subs.charge 非 silent 内部已重算余额，这里不再重复

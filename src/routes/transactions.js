@@ -227,6 +227,8 @@ router.post('/bulk', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
     case 'restore': {
       run(`UPDATE transactions SET deleted_at = NULL WHERE ledger_id = ? AND id IN (${placeholders})`, ledgerId, ...ids);
       require('../db').recalcBalances(ledgerId);
+      // 恢复借贷类交易后同步重建台账（与开放 API 恢复路径一致）
+      txn.syncDebts(ledgerId);
       res.flash('success', '已恢复');
       break;
     }
