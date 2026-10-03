@@ -23,16 +23,23 @@ function advanceDate(dateStr, rule) {
     case 'weekly':
       d.setDate(d.getDate() + 7 * n);
       break;
-    case 'yearly':
-      d.setFullYear(d.getFullYear() + n);
+    case 'yearly': {
+      // 2/29 年付钳到 02/28，避免 setFullYear 溢出成 3/1 后永久漂移
+      const y2 = d.getFullYear() + n;
+      const last = new Date(y2, 2, 0).getDate();
+      d.setFullYear(y2, d.getMonth(), Math.min(d.getDate(), last));
       break;
+    }
     case 'monthly':
     default: {
+      // 月末锚点必须用纯算术先定年月再钳日：
+      // setMonth 在 1/31 + 1 个月时会溢出成 3/2，后续再钳日就永远停在 3 月（整月跳账）
       const day = Number(rule.day_of_month) || d.getDate();
-      d.setMonth(d.getMonth() + n);
-      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      d.setDate(Math.min(day, last));
-      break;
+      const total = d.getMonth() + n;
+      const y2 = d.getFullYear() + Math.floor(total / 12);
+      const m2 = (total % 12) + 1;
+      const last = new Date(y2, m2, 0).getDate();
+      return `${y2}-${pad(m2)}-${pad(Math.min(day, last))}`;
     }
   }
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;

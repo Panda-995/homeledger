@@ -197,8 +197,10 @@ router.post('/settings/password', auth.requireLogin, (req, res) => {
   if (pw.length < 6) { res.flash('error', '新密码至少 6 位'); return res.redirect('/settings'); }
   if (pw !== pw2) { res.flash('error', '两次输入的新密码不一致'); return res.redirect('/settings'); }
   run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(pw), req.session.userId);
+  // 吊销其他设备的会话（保留当前），防止 Cookie 泄漏后改密也无效（rolling 会续期 30 天）
+  run('DELETE FROM sessions WHERE user_id = ? AND sid != ?', req.session.userId, req.session.id);
   auth.audit(req, 'user.password_change', { entity: 'user', entityId: req.session.userId });
-  res.flash('success', '密码已修改');
+  res.flash('success', '密码已修改，其他设备已退出登录');
   res.redirect('/settings');
 });
 
@@ -310,25 +312,43 @@ router.post('/ledgers', auth.requireLogin, (req, res) => {
   res.redirect('/ledgers');
 });
 
-router.post('/ledgers/:id', auth.requireLogin, auth.requireLedgerManage, (req, res) => {
+/** 目标账本的管理权限：requireLedgerManage 只校验"会话当前账本"，对 :id 指向的账本零校验，
+ *  必须在这里按目标账本的成员角色再判一次（IDOR：否则任意用户可改/归档全站任意账本） */
+function requireTargetLedgerManage(req, res, id) {
+  const m = auth.membership(req.session.userId, id);
+  if (!m || !auth.canManage(m.role)) {
+    res.flash('error', '需要该账本的管理员权限');
+    res.redirect('/ledgers');
+    return false;
+  }
+  return true;
+}
+
+const LEDGER_KINDS = ['personal', 'family', 'business', 'travel', 'project'];
+
+router.post('/ledgers/:id', auth.requireLogin, (req, res) => {
   const id = Number(req.params.id);
+  if (!requireTargetLedgerManage(req, res, id)) return;
   const l = get('SELECT * FROM ledgers WHERE id = ?', id);
   if (!l) { res.flash('error', '账本不存在'); return res.redirect('/ledgers'); }
   run('UPDATE ledgers SET name=?, kind=?, currency=?, icon=?, color=?, note=?, sort_order=? WHERE id=?',
-    String(req.body.name || l.name).slice(0, 30), req.body.kind || l.kind,
+    String(req.body.name || l.name).slice(0, 30), LEDGER_KINDS.includes(req.body.kind) ? req.body.kind : l.kind,
     String(req.body.currency || l.currency).slice(0, 8),
     req.body.icon || l.icon, u.safeColor(req.body.color, l.color),
     req.body.note ? String(req.body.note).slice(0, 200) : null,
     Number(req.body.sort_order) || l.sort_order, id);
+  auth.audit(req, 'ledger.update', { entity: 'ledger', entityId: id, detail: String(req.body.name || l.name) });
   res.flash('success', '账本信息已更新');
   res.redirect('/ledgers');
 });
 
-router.post('/ledgers/:id/archive', auth.requireLogin, auth.requireLedgerManage, (req, res) => {
+router.post('/ledgers/:id/archive', auth.requireLogin, (req, res) => {
   const id = Number(req.params.id);
+  if (!requireTargetLedgerManage(req, res, id)) return;
   const l = get('SELECT * FROM ledgers WHERE id = ?', id);
   if (!l) return res.redirect('/ledgers');
   run('UPDATE ledgers SET is_archived = ? WHERE id = ?', l.is_archived ? 0 : 1, id);
+  auth.audit(req, 'ledger.archive', { entity: 'ledger', entityId: id, detail: l.is_archived ? '恢复' : '归档' });
   res.flash('success', l.is_archived ? '账本已恢复' : '账本已归档');
   res.redirect('/ledgers');
 });
@@ -353,6 +373,8 @@ function deleteLedgerCascade(id) {
   run('DELETE FROM ledger_members WHERE ledger_id = ?', id);
   run('DELETE FROM ledger_invites WHERE ledger_id = ?', id);
   run('DELETE FROM import_jobs WHERE ledger_id = ?', id);
+  // 绑定该账本的 API 令牌置空账本（令牌仍可用，回退到用户名下第一个账本）
+  run('UPDATE api_tokens SET ledger_id = NULL WHERE ledger_id = ?', id);
   run('DELETE FROM ledgers WHERE id = ?', id);
   return files.map((f) => f.rel_path);
 }
@@ -437,6 +459,19 @@ router.post('/members/:id/remove', auth.requireLogin, auth.requireLedgerManage, 
   run('DELETE FROM ledger_members WHERE id = ?', id);
   auth.audit(req, 'member.remove', { ledgerId, detail: String(m.user_id) });
   res.flash('success', '成员已移出账本');
+  res.redirect('/members');
+});
+
+/** 吊销未使用的邀请码（管理员） */
+router.post('/members/invites/:id/revoke', auth.requireLogin, auth.requireLedgerManage, (req, res) => {
+  const ledgerId = Number(res.locals.ledger.id);
+  const id = Number(req.params.id);
+  const inv = get('SELECT * FROM ledger_invites WHERE id = ? AND ledger_id = ? AND used_by IS NULL', id, ledgerId);
+  if (inv) {
+    run('DELETE FROM ledger_invites WHERE id = ?', inv.id);
+    auth.audit(req, 'invite.revoke', { ledgerId, entity: 'invite', entityId: inv.id });
+    res.flash('success', '邀请码已吊销');
+  }
   res.redirect('/members');
 });
 
@@ -698,16 +733,27 @@ router.post('/admin/users/:id', auth.requireLogin, auth.requireAdmin, (req, res)
     case 'reset': {
       const pw = String(req.body.new_password || '').trim() || ('hl' + u.uid(8));
       run('UPDATE users SET password_hash = ? WHERE id = ?', auth.hashPassword(pw), id);
-      res.flash('success', `已重置 ${user.display_name} 的密码为：${pw}（请转告本人后尽快修改）`);
+      // 重置密码 = 凭据已换，踢掉该用户全部会话（含可能被盗的）
+      run('DELETE FROM sessions WHERE user_id = ?', id);
+      res.flash('success', `已重置 ${user.display_name} 的密码为：${pw}（其所有登录已失效，请转告本人后尽快修改）`);
       break;
     }
     case 'delete': {
       const owned = all('SELECT id, name FROM ledgers WHERE owner_id = ?', id);
       const files = [];
       for (const l of owned) {
-        const others = get('SELECT user_id FROM ledger_members WHERE ledger_id = ? AND user_id != ? LIMIT 1', l.id, id);
-        if (others) run('UPDATE ledgers SET owner_id = ? WHERE id = ?', others.user_id, l.id);
-        else tx(() => { files.push(...deleteLedgerCascade(l.id)); });
+        // 接任者优先从有管理能力的成员里选（原实现无 ORDER BY 且不提权，可能落到 viewer 且账本永久无 owner）
+        const heir = get(
+          `SELECT user_id FROM ledger_members WHERE ledger_id = ? AND user_id != ?
+             AND role IN ('admin','member') ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END, id LIMIT 1`,
+          l.id, id
+        );
+        if (heir) {
+          run('UPDATE ledgers SET owner_id = ? WHERE id = ?', heir.user_id, l.id);
+          run("UPDATE ledger_members SET role = 'owner' WHERE ledger_id = ? AND user_id = ?", l.id, heir.user_id);
+        } else {
+          tx(() => { files.push(...deleteLedgerCascade(l.id)); });
+        }
       }
       cleanupUploadFiles(files);
       run('DELETE FROM ledger_members WHERE user_id = ?', id);

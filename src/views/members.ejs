@@ -79,8 +79,9 @@
       <% } %>
     </div>
 
+    <% if (canManage(ledger.role)) { %>
     <div class="card">
-      <div class="card-head"><h2>邀请记录</h2></div>
+      <div class="card-head"><h2>邀请记录</h2><span class="muted small">仅管理员可见</span></div>
       <% if (!invites.length) { %>
         <div class="empty" style="padding:16px">暂无邀请</div>
       <% } %>
@@ -95,11 +96,19 @@
             <% if (i.used_by) { %><span class="chip income">已使用</span><% } else { %><span class="chip">未使用</span><% } %>
           </div>
           <% if (!i.used_by && (!i.expires_at || i.expires_at >= today)) { %>
-            <div class="tiny mt8"><span class="mono">/join/<%= i.code %></span></div>
+            <div class="row mt8" style="gap:8px">
+              <span class="mono tiny">/join/<%= i.code %></span>
+              <span class="spacer"></span>
+              <form method="post" action="/members/invites/<%= i.id %>/revoke" data-confirm="吊销该邀请码？持有链接的人将无法再加入。">
+                <input type="hidden" name="_csrf" value="<%= csrf %>">
+                <button class="btn btn-sm btn-danger" type="submit">吊销</button>
+              </form>
+            </div>
           <% } %>
         </div>
       <% }); %>
     </div>
+    <% } %>
 
     <div class="card">
       <div class="card-head"><h2>角色权限说明</h2></div>

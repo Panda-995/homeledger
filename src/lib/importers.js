@@ -82,6 +82,9 @@ function detectSource(headerLine, fullText) {
 
 const SKIP_STATUS = /已关闭|交易关闭|已退款|全额退款|退款成功|失败|已撤销|已取消|待付款|待收货|银行处理中|已退回/;
 
+/** 导出 CSV type_key 列的合法值 */
+const TXN_KEYS = new Set(['expense','income','transfer','lend','borrow','repay_receive','repay_pay','reimburse','refund','fee','interest','invest_buy','invest_sell','adjust']);
+
 function normalizeRow({ date, direction, amountText, merchant, desc, categoryText, accountText, status, orderNo }) {
   const amountCents = parseAmountToCents(amountText);
   const dir = String(direction || '').trim();
@@ -89,6 +92,10 @@ function normalizeRow({ date, direction, amountText, merchant, desc, categoryTex
   let neutral = false;
   if (/不计/.test(dir)) {
     // 转账 / 提现 / 充值 等「不计收支」记录：默认不导入（成对记录只导一半会破坏余额）
+    type = 'transfer';
+    neutral = true;
+  } else if (/^\/?$/.test(dir) || !dir) {
+    // 微信账单里零钱充值/提现/亲属卡等行的「收/支」列是 "/"——同属资金搬移，归入不计收支
     type = 'transfer';
     neutral = true;
   } else if (/收入|收/.test(dir)) type = 'income';
@@ -140,6 +147,7 @@ function parseBill(buffer) {
   const iAccount = headerIndex(header, ['收/付款方式', '支付方式', '付款方式', '账户', 'account']);
   const iStatus = headerIndex(header, ['当前状态', '交易状态', '状态', 'status']);
   const iOrder = headerIndex(header, ['交易订单号', '交易单号', '订单号', 'order']);
+  const iTypeKey = headerIndex(header, ['type_key']);
 
   const records = [];
   const neutralRecords = []; // 提现 / 充值 / 余额宝转出等「不计收支」记录，默认不入库
@@ -225,6 +233,13 @@ function importRecords({
           toAccountId = autoCreateAccount
             ? ensureAccount(ledgerId, cpName, createdAccounts) || ensureAccount(ledgerId, NEUTRAL_FALLBACK_ACCOUNT, createdAccounts)
             : resolveAccountId(ledgerId, cpName) || null;
+        } else if (rec.type === 'transfer' || rec.type === 'invest_buy' || rec.type === 'invest_sell' || rec.type === 'lend' || rec.type === 'borrow') {
+          // 回导的双边类型（转账/借贷）：对方账户从说明文字推断；推不出就按 transfer 兜底（一方账户仍保留）
+          const cpName = guessAccountName(rec.text) || NEUTRAL_FALLBACK_ACCOUNT;
+          toAccountId = autoCreateAccount
+            ? ensureAccount(ledgerId, cpName, createdAccounts)
+            : resolveAccountId(ledgerId, cpName) || null;
+          if (!toAccountId) rec.type = 'transfer';
         } else {
           const kind = rec.type === 'income' ? 'income' : 'expense';
           const kw = classifyByKeywords(rec.text);
@@ -232,13 +247,16 @@ function importRecords({
           if (!categoryId && kw) categoryId = resolveCategoryId(ledgerId, kw.category, kw.kind === 'income' ? 'income' : kind);
           if (!categoryId) categoryId = resolveCategoryId(ledgerId, kind === 'income' ? '其他收入' : '其他支出', kind);
         }
+        // 余额调整回导保留负金额（调减为带符号数），方向不能翻转；
+        // 但 expense/income 直接以负数入库会把方向写反（txnEffects 对 expense 取 -a），钳回正数
+        const signedAmount = rec.type === 'adjust' ? rec.amount_cents : Math.abs(rec.amount_cents);
 
         run(
           `INSERT INTO transactions
            (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id, to_account_id, category_id,
             user_id, txn_date, note, merchant, status, source, ai_json, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          ledgerId, rec.type, rec.amount_cents, 'CNY', 1, rec.amount_cents,
+          ledgerId, rec.type, signedAmount, 'CNY', 1, signedAmount,
           accountId, toAccountId, categoryId, userId, rec.txn_date, rec.note, rec.merchant,
           'cleared', 'import', JSON.stringify({ source, order_no: rec.order_no, neutral: !!rec.neutral }),
           nowStr(), nowStr()
@@ -279,7 +297,8 @@ function toCsv(header, rows) {
   return '\uFEFF' + lines.join('\r\n') + '\r\n';
 }
 
-const EXPORT_HEADER = ['日期', '类型', '金额', '币种', '折算金额', '分类', '账户', '转入账户', '成员', '商家', '备注', '标签', '来源', '状态'];
+// 第二列「类型」是人读中文 label，第十六列 type_key 是机读枚举（回导时优先用它精确还原类型）
+const EXPORT_HEADER = ['日期', '类型', '金额', '币种', '折算金额', '分类', '账户', '转入账户', '成员', '商家', '备注', '标签', '来源', '状态', '备注2', 'type_key'];
 
 function exportRows(ledgerId, rows) {
   return rows.map((t) => [

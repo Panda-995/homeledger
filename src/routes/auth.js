@@ -167,11 +167,19 @@ router.get('/join/:code', auth.requireLogin, (req, res) => {
   if (invite.expires_at && invite.expires_at < require('../db').todayStr()) {
     return res.status(410).render('error', { title: '邀请已过期', message: '请让账本管理员重新生成邀请链接。' });
   }
-  if (Number(invite.used_by) && Number(invite.used_by) !== Number(req.session.userId)) {
-    return res.status(410).render('error', { title: '邀请已使用', message: '该邀请链接已被其他成员使用。' });
+  // 已使用的邀请一律不能再入（含本人）：否则被降级/移出的成员可拿旧链接恢复原角色
+  if (Number(invite.used_by)) {
+    return res.status(410).render('error', { title: '邀请已使用', message: '该邀请链接已被使用，请让账本管理员重新生成。' });
   }
   const ledger = get('SELECT * FROM ledgers WHERE id = ?', invite.ledger_id);
   if (!ledger) return res.status(404).render('error', { title: '账本不存在', message: '该账本已被删除。' });
+  // 已是成员则不重复授予角色（避免 viewer 重新走链接被提升）
+  const existing = auth.membership(req.session.userId, invite.ledger_id);
+  if (existing) {
+    req.session.ledgerId = Number(invite.ledger_id);
+    req.session.flash = { type: 'info', message: `你已是账本「${ledger.name}」的成员` };
+    return res.redirect('/');
+  }
 
   require('../db').addLedgerMember(invite.ledger_id, req.session.userId, invite.role || 'member');
   run('UPDATE ledger_invites SET used_by = ?, used_at = ? WHERE id = ?', req.session.userId, nowStr(), invite.id);

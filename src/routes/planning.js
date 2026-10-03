@@ -171,7 +171,7 @@ router.post('/recurring', auth.requireLogin, auth.requireLedgerWrite, (req, res)
   if (!items.length) { res.flash('error', '请至少填写一项金额'); return res.redirect('/recurring'); }
 
   const frequency = ['daily', 'weekly', 'monthly', 'yearly'].includes(req.body.frequency) ? req.body.frequency : 'monthly';
-  let next = req.body.next_run_at || todayStr();
+  let next = /^d{4}-d{2}-d{2}$/.test(String(req.body.next_run_at || '')) ? req.body.next_run_at : todayStr();
   // 若首次执行日已过，自动推到下一个周期
   let guard = 0;
   while (next < todayStr() && guard++ < 400) next = sch.advanceDate(next, { frequency, interval_n: Number(req.body.interval_n) || 1, day_of_month: req.body.day_of_month });

@@ -8,6 +8,9 @@ ENV TZ=Asia/Shanghai \
 
 WORKDIR /app
 
+# slim 基础镜像不含 tzdata，TZ=Asia/Shanghai 会被静默回退 UTC（记账日期错天），必须显式安装
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata     && rm -rf /var/lib/apt/lists/*
+
 # 先装依赖，利用镜像层缓存；lockfile 一并拷入 + npm ci，保证依赖版本可复现
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund
