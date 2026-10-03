@@ -43,9 +43,18 @@ const FEATURES = [
  */
 const CHANGELOG = [
   {
-    version: '1.6.1',
+    version: '1.6.2',
     date: '2026-10-04',
     tag: '当前版本',
+    items: [
+      '修复：网页端"从备份恢复"上传成功却提示失败——恢复接口对前端 fetch 请求误回 302 重定向（HTML），现正确返回 JSON 结果与提示',
+      '恢复成功的 toast 会显示服务器返回的具体说明',
+    ],
+  },
+  {
+    version: '1.6.1',
+    date: '2026-10-04',
+    tag: '',
     items: [
       '关于页与项目署名切换为 fork 身份：提需求 / 报 Bug 指向 Panda-995/homeledger',
       '运行环境注明维护者为 Panda-995，并保留源仓库（sucraft-hub/homeledger，作者蘇先生）链接与 AI 辅助声明',

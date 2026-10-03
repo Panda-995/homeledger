@@ -662,13 +662,20 @@ router.get('/backup/db', auth.requireLogin, auth.requireAdmin, (req, res, next) 
 
 /** 恢复：保存上传文件并替换数据库（需重启容器生效） */
 router.post('/backup/restore', auth.requireLogin, auth.requireAdmin, (req, res) => {
+  // 前端 fetch 上传时带 Accept: application/json —— 必须回 JSON，
+  // 否则 fetch 跟随 302 重定向拿到 HTML，res.json() 解析失败误报"服务器返回异常"
+  const wantsJson = (req.headers.accept || '').includes('application/json') || req.xhr;
+  const done = (ok, message) => {
+    if (wantsJson) return res.json({ ok, message });
+    res.flash(ok ? 'success' : 'error', message);
+    return res.redirect('/export');
+  };
   try {
     const m = /^data:.*?;base64,(.+)$/s.exec(String(req.body.dataUrl || ''));
-    if (!m) { res.flash('error', '请选择 .db 数据库文件'); return res.redirect('/export'); }
+    if (!m) return done(false, '请选择 .db 数据库文件');
     const buf = Buffer.from(m[1], 'base64');
     if (buf.length < 100 || buf.slice(0, 15).toString('utf8') !== 'SQLite format 3') {
-      res.flash('error', '文件不是有效的 SQLite 数据库');
-      return res.redirect('/export');
+      return done(false, '文件不是有效的 SQLite 数据库');
     }
     const safety = path.join(DATA_DIR, `pre-restore-${Date.now()}.db`);
     fs.copyFileSync(DB_FILE, safety);
@@ -676,11 +683,9 @@ router.post('/backup/restore', auth.requireLogin, auth.requireAdmin, (req, res) 
     fs.writeFileSync(path.join(DATA_DIR, 'RESTORE-PENDING.txt'),
       `已上传待恢复数据库，时间 ${nowStr()}\n当前数据已备份为：${path.basename(safety)}\n\n恢复方法：\n1) 停止容器；\n2) 把 restore-pending.db 改名为 homeledger.db 覆盖原文件（同时删除 homeledger.db-wal / -shm）；\n3) 启动容器。\n`);
     auth.audit(req, 'backup.restore_upload', { detail: `备份于 ${path.basename(safety)}` });
-    res.flash('success', `已接收备份文件并做好安全备份（${path.basename(safety)}）。请按 data 目录下 RESTORE-PENDING.txt 的说明完成恢复。`);
-    res.redirect('/export');
+    return done(true, `已接收备份文件并做好安全备份（${path.basename(safety)}）。请按 data 目录下 RESTORE-PENDING.txt 的说明完成恢复。`);
   } catch (e) {
-    res.flash('error', '恢复失败：' + e.message);
-    res.redirect('/export');
+    return done(false, '恢复失败：' + e.message);
   }
 });
 

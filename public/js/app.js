@@ -767,7 +767,7 @@
         if (!okGo) { restoreInput.value = ''; return; }
         const dataUrl = await fileToDataUrl(f);
         const res = await postJson('/backup/restore', { dataUrl });
-        toast(res.ok ? '已接收，请按提示完成恢复' : '失败：' + res.error, res.ok ? 'success' : 'error');
+        toast(res.ok ? (res.message || '已接收，请按提示完成恢复') : '失败：' + (res.error || '未知错误'), res.ok ? 'success' : 'error');
         restoreInput.value = '';
         setTimeout(() => window.location.reload(), 1500);
       });
