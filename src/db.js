@@ -47,7 +47,16 @@ const run = (sql, ...p) => {
   return { changes: Number(r.changes), lastInsertRowid: Number(r.lastInsertRowid) };
 };
 function tx(fn) {
-  db.exec('BEGIN');
+  // 可重入：批量操作会在事务里再次调用走 tx 的写入函数（createTransaction → recalcBalances），
+  // SQLite 不允许嵌套 BEGIN，此时直接沿用在当前事务内执行。
+  let nested = false;
+  try {
+    db.exec('BEGIN');
+  } catch (e) {
+    if (/within a transaction/i.test(e.message)) nested = true;
+    else throw e;
+  }
+  if (nested) return fn();
   try {
     const r = fn();
     db.exec('COMMIT');

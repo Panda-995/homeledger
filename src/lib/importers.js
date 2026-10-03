@@ -266,7 +266,9 @@ function importRecords({
 /* --------------------------------- 导出 ---------------------------------- */
 
 function csvEscape(v) {
-  const s = v === null || v === undefined ? '' : String(v);
+  let s = v === null || v === undefined ? '' : String(v);
+  // 公式注入防护：以 = + - @ 开头的单元格加前缀，防止 Excel/WPS 打开时当公式执行
+  if (/^[=+\-@]/.test(s)) s = `'` + s;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

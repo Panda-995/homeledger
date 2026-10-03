@@ -40,7 +40,9 @@ function advanceDate(dateStr, rule) {
 
 function runDueRecurring(today = todayStr()) {
   const rules = all('SELECT * FROM recurring_rules WHERE is_active = 1 AND next_run_at <= ?', today);
+  const { recalcBalances } = require('../db');
   let created = 0;
+  const touchedLedgers = new Set();
   for (const rule of rules) {
     let payload;
     try { payload = JSON.parse(rule.payload); } catch { continue; }
@@ -65,17 +67,25 @@ function runDueRecurring(today = todayStr()) {
         run('UPDATE recurring_rules SET last_run_at = ?, next_run_at = ? WHERE id = ?', rule.next_run_at, advanceDate(rule.next_run_at, rule), rule.id);
       }
     });
+    touchedLedgers.add(Number(rule.ledger_id));
     if (rule.auto_post) continue;
-    // 非自动模式：只提醒
-    for (const uid of ledgerWriterIds(rule.ledger_id)) {
-      notify(uid, {
-        kind: 'recurring', ledgerId: rule.ledger_id,
-        title: `周期账单待确认：${rule.name}`,
-        body: `计划日期 ${rule.next_run_at}`,
-        link: '/recurring',
-      });
+    // 非自动模式：只提醒（dedupe key 按计划日期去重，避免每 30 分钟轮询重复轰炸）
+    const dedupeKey = `recurring:${rule.id}:${rule.next_run_at}`;
+    if (!alreadyNotified(dedupeKey)) {
+      for (const uid of ledgerWriterIds(rule.ledger_id)) {
+        notify(uid, {
+          kind: 'recurring', ledgerId: rule.ledger_id,
+          title: `周期账单待确认：${rule.name}`,
+          body: `计划日期 ${rule.next_run_at} |${dedupeKey}`,
+          link: '/recurring',
+        });
+      }
     }
     run('UPDATE recurring_rules SET last_run_at = ? WHERE id = ?', nowStr(), rule.id);
+  }
+  // 自动记账后余额必须重算（手动记账/订阅扣费路径都会重算，这里此前漏了）
+  for (const lid of touchedLedgers) {
+    try { recalcBalances(lid); } catch { /* 单账本失败不影响其他任务 */ }
   }
   return created;
 }

@@ -20,7 +20,8 @@ function readForm(body) {
     if (n && amt) splits.push({ member_name: String(n).slice(0, 30), share_cents: amt });
   });
   return {
-    type: body.type || 'expense',
+    // type 走白名单：透传任意值会在编辑失败回显时进入内嵌 <script> 的 JSON
+    type: TXN_TYPE_MAP[body.type] ? body.type : 'expense',
     amount_cents: u.parseAmountToCents(body.amount),
     currency: body.currency || 'CNY',
     rate: body.rate ? Number(body.rate) : 1,
@@ -37,6 +38,12 @@ function readForm(body) {
     group_id: body.group_id || null,
     source: body.source || 'manual',
   };
+}
+
+/** back 只接受站内相对路径，避免 POST 参数被构造成开放重定向 */
+function safeBack(back) {
+  const s = String(back || '');
+  return s.startsWith('/') && !s.startsWith('//') && !s.startsWith('/\\') ? s : '/transactions';
 }
 
 /* ---------------------------------- 列表 ---------------------------------- */
@@ -110,14 +117,14 @@ router.post('/', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
     auth.audit(req, 'txn.create', { entity: 'transaction', entityId: id, ledgerId, detail: `${data.type} ${(data.amount_cents / 100).toFixed(2)}` });
     if (wantsJson) return res.json({ ok: true, id, redirect: '/transactions' });
     res.flash('success', '已记一笔 ✓');
-    res.redirect(req.body.back || '/transactions');
+    res.redirect(safeBack(req.body.back));
   } catch (e) {
     if (wantsJson) return res.status(400).json({ ok: false, error: e.message });
     const form = fd.txFormData(ledgerId, req.session.userId);
     res.status(400).render('txn-form', {
       title: '记一笔', activeNav: 'new', mode: 'create', form,
       t: { ...data, amount: (data.amount_cents / 100).toFixed(2) },
-      splitRows: data.splits, splits: [], back: req.body.back || '/transactions', error: e.message,
+      splitRows: data.splits, splits: [], back: safeBack(req.body.back), error: e.message,
     });
   }
 });
@@ -146,14 +153,14 @@ router.post('/:id', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
     txn.updateTransaction(id, ledgerId, req.session.userId, data);
     auth.audit(req, 'txn.update', { entity: 'transaction', entityId: id, ledgerId });
     res.flash('success', '已保存修改');
-    res.redirect(req.body.back || '/transactions');
+    res.redirect(safeBack(req.body.back));
   } catch (e) {
     const form = fd.txFormData(ledgerId, req.session.userId);
     const t = txn.getTransaction(id, ledgerId);
     res.status(400).render('txn-form', {
       title: '编辑记录', activeNav: 'transactions', mode: 'edit', form,
       t: { ...t, ...data, amount: (data.amount_cents / 100).toFixed(2) },
-      splitRows: data.splits, splits: data.splits, back: req.body.back || '/transactions', error: e.message,
+      splitRows: data.splits, splits: data.splits, back: safeBack(req.body.back), error: e.message,
     });
   }
 });
@@ -164,7 +171,7 @@ router.post('/:id/delete', auth.requireLogin, auth.requireLedgerWrite, (req, res
   auth.audit(req, 'txn.delete', { entity: 'transaction', entityId: Number(req.params.id), ledgerId });
   if (req.body._json === '1') return res.json({ ok });
   res.flash(ok ? 'success' : 'error', ok ? '已删除' : '记录不存在');
-  res.redirect(req.body.back || '/transactions');
+  res.redirect(safeBack(req.body.back));
 });
 
 /* --------------------------------- 批量操作 -------------------------------- */
@@ -175,7 +182,7 @@ router.post('/bulk', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
   const action = req.body.action || '';
   if (!ids.length) {
     res.flash('error', '请先勾选记录');
-    return res.redirect(req.body.back || '/transactions');
+    return res.redirect(safeBack(req.body.back));
   }
   const placeholders = ids.map(() => '?').join(',');
   switch (action) {
@@ -215,13 +222,14 @@ router.post('/bulk', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
     }
     case 'restore': {
       run(`UPDATE transactions SET deleted_at = NULL WHERE ledger_id = ? AND id IN (${placeholders})`, ledgerId, ...ids);
+      require('../db').recalcBalances(ledgerId);
       res.flash('success', '已恢复');
       break;
     }
     default:
       res.flash('error', '未知操作');
   }
-  res.redirect(req.body.back || '/transactions');
+  res.redirect(safeBack(req.body.back));
 });
 
 module.exports = router;

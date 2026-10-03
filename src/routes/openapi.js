@@ -1,6 +1,6 @@
 'use strict';
 /**
- * 开放 API：供小龙虾（OpenClaw / PicoClaw）、快捷指令等外部工具调用。
+ * 开放 API：供小龙虾（OpenClaw / PicoClaw）、Hermes Agent、快捷指令等外部工具调用。
  * 鉴权：Authorization: Bearer <令牌>（在「设置 → 开放 API」中创建）。
  * 本路由挂在全局 CSRF 中间件之前，不走会话；令牌只存 SHA-256 摘要。
  */
@@ -51,6 +51,16 @@ function requireToken(req, res, next) {
 }
 
 router.use(requireToken);
+
+/** 写操作需令牌所属用户在该账本有写权限（防止只读成员用令牌绕过网页端角色限制） */
+router.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const m = get('SELECT role FROM ledger_members WHERE user_id = ? AND ledger_id = ?', req.openAuth.userId, req.openAuth.ledgerId);
+  if (!m || !auth.canWrite(m.role)) {
+    return res.status(403).json({ ok: false, error: '该令牌所属用户在此账本中只有只读权限，无法执行写操作' });
+  }
+  next();
+});
 
 /* --------------------------------- 连通性 -------------------------------- */
 
@@ -293,7 +303,7 @@ router.get('/attachments/:id', (req, res) => {
   const { ledgerId } = req.openAuth;
   const found = att.resolveFile(ledgerId, req.params.id);
   if (!found) return res.status(404).json({ ok: false, error: '截图不存在' });
-  res.type(found.row.mime || 'application/octet-stream');
+  res.type(att.safeMime(found.row.mime));
   res.setHeader('Cache-Control', 'private, max-age=86400');
   res.sendFile(found.abs);
 });

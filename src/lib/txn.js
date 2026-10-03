@@ -162,7 +162,10 @@ function pickCategory(ledgerId, id) {
  */
 function createTransaction(ledgerId, userId, d) {
   const type = TXN_TYPE_MAP[d.type] ? d.type : 'expense';
-  const amount = Math.abs(Math.round(Number(d.amount_cents) || 0));
+  // 余额调整（adjust）的金额是带符号的差额（调减为负），其余类型一律取绝对值
+  const isAdjust = type === 'adjust';
+  const rawAmount = Math.round(Number(d.amount_cents) || 0);
+  const amount = isAdjust ? rawAmount : Math.abs(rawAmount);
   if (!amount) throw new Error('金额必须大于 0');
   const rate = Number(d.rate) > 0 ? Number(d.rate) : 1;
   const currency = d.currency || 'CNY';
@@ -171,6 +174,7 @@ function createTransaction(ledgerId, userId, d) {
   if (['expense', 'income', 'lend', 'borrow', 'repay_pay', 'repay_receive', 'fee', 'interest'].includes(type) && !accountId) {
     throw new Error('请选择账户');
   }
+  if (isAdjust && !accountId) throw new Error('余额调整需要指定账户');
   if (type === 'transfer' && (!accountId || !toAccountId)) throw new Error('转账需要选择转出与转入账户');
   if (type === 'transfer' && accountId === toAccountId) throw new Error('转出与转入账户不能相同');
 
@@ -203,15 +207,20 @@ function updateTransaction(id, ledgerId, userId, d) {
   const old = get('SELECT * FROM transactions WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL', id, ledgerId);
   if (!old) throw new Error('记录不存在');
   const type = TXN_TYPE_MAP[d.type] ? d.type : old.type;
-  const amount = Math.abs(Math.round(Number(d.amount_cents) || 0));
+  const rawAmount = Math.round(Number(d.amount_cents) || 0);
+  const amount = type === 'adjust' ? rawAmount : Math.abs(rawAmount);
   if (!amount) throw new Error('金额必须大于 0');
   const rate = Number(d.rate) > 0 ? Number(d.rate) : 1;
+  const accountId = pickAccount(ledgerId, d.account_id);
+  const toAccountId = pickAccount(ledgerId, d.to_account_id);
+  if (type === 'transfer' && (!accountId || !toAccountId)) throw new Error('转账需要选择转出与转入账户');
+  if (type === 'transfer' && accountId === toAccountId) throw new Error('转出与转入账户不能相同');
   run(
     `UPDATE transactions SET type=?, amount_cents=?, currency=?, rate=?, amount_base_cents=?, account_id=?,
        to_account_id=?, category_id=?, txn_date=?, note=?, merchant=?, status=?, is_reimbursable=?,
        updated_at=? WHERE id=?`,
     type, amount, d.currency || old.currency, rate, toBase(amount, rate),
-    pickAccount(ledgerId, d.account_id), pickAccount(ledgerId, d.to_account_id),
+    accountId, toAccountId,
     pickCategory(ledgerId, d.category_id),
     /^\d{4}-\d{2}-\d{2}$/.test(String(d.txn_date || '')) ? d.txn_date : old.txn_date,
     d.note ? String(d.note).slice(0, 300) : null,
@@ -222,6 +231,7 @@ function updateTransaction(id, ledgerId, userId, d) {
   );
   applyTags(id, ledgerId, d.tags, true);
   if (d.splits && d.splits.length) saveSplits(ledgerId, id, old.group_id, d.splits);
+  else if (Array.isArray(d.splits) && old.group_id) run('DELETE FROM splits WHERE transaction_id = ?', id);
   recalcBalances(ledgerId);
   syncDebts(ledgerId);
   return id;
@@ -231,7 +241,7 @@ function softDelete(id, ledgerId) {
   const t = get('SELECT * FROM transactions WHERE id = ? AND ledger_id = ?', id, ledgerId);
   if (!t) return false;
   run('UPDATE transactions SET deleted_at = ?, updated_at = ? WHERE id = ?', nowStr(), nowStr(), id);
-  if (t.group_id) run('DELETE FROM splits WHERE group_id = ?', t.group_id);
+  // 分账数据保留（物理删除后「恢复」就找不回来了）；列表/统计均按 deleted_at 过滤，无副作用
   recalcBalances(ledgerId);
   syncDebts(ledgerId);
   return true;
@@ -240,15 +250,26 @@ function softDelete(id, ledgerId) {
 function bulkDelete(ids, ledgerId) {
   let n = 0;
   tx(() => {
-    for (const id of ids) if (softDelete(Number(id), ledgerId)) n++;
+    for (const id of ids) {
+      const t = get('SELECT id FROM transactions WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL', Number(id), ledgerId);
+      if (!t) continue;
+      run('UPDATE transactions SET deleted_at = ?, updated_at = ? WHERE id = ?', nowStr(), nowStr(), Number(id));
+      n++;
+    }
+    // 整批只重算一次；软删不物理清分账，恢复后数据完整
+    recalcBalances(ledgerId);
+    syncDebts(ledgerId);
   });
   return n;
 }
 
 /** 报销：把若干笔标记为已报销，并生成一笔报销入账 */
 function markReimbursed(ids, ledgerId, userId, accountId) {
+  if (!ids || !ids.length) throw new Error('没有可报销的记录');
   const rows = all(
-    `SELECT * FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND id IN (${ids.map(() => '?').join(',')})`,
+    `SELECT * FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL
+       AND is_reimbursable = 1 AND reimbursed_at IS NULL
+       AND id IN (${ids.map(() => '?').join(',')})`,
     ledgerId, ...ids
   );
   const total = rows.reduce((a, b) => a + Number(b.amount_base_cents), 0);
@@ -301,7 +322,8 @@ function colorFromName(name) {
 
 function saveSplits(ledgerId, txnId, groupId, splits) {
   const gid = groupId || `sp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-  run('DELETE FROM splits WHERE group_id = ?', gid);
+  // 只替换本笔交易的分账：按 transaction_id 删，避免 group_id 被多笔共享时误删他人分账
+  run('DELETE FROM splits WHERE transaction_id = ?', txnId);
   for (const s of splits) {
     const share = Math.round(Number(s.share_cents) || 0);
     if (!share) continue;
@@ -469,12 +491,13 @@ function dailyBreakdown(ledgerId, start, end) {
 /** 账户概览 */
 function accountOverview(ledgerId) {
   const accounts = all('SELECT * FROM accounts WHERE ledger_id = ? AND is_archived = 0 ORDER BY sort_order, id', ledgerId);
-  const LIABILITY = ['credit', 'loan', 'payable'];
   let assets = 0, liabilities = 0;
   for (const a of accounts) {
     const b = Number(a.balance_cents);
-    if (LIABILITY.includes(a.type)) liabilities += Math.abs(Math.min(b, 0)) || Math.abs(b);
-    else if (b > 0) assets += b;
+    // 统一口径：正余额计资产、负余额计负债（含透支的虚拟账户），
+    // 保证「净资产 = 资产 − 负债」与逐账户求和恒等；负债类账户的溢缴款（正余额）计资产
+    if (b > 0) assets += b;
+    else liabilities += -b;
   }
   const net = accounts.filter((a) => a.include_in_net).reduce((s, a) => s + Number(a.balance_cents), 0);
   return { accounts, assets, liabilities, net };

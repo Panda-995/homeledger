@@ -93,7 +93,6 @@ router.post('/accounts/:id', auth.requireLogin, auth.requireLedgerWrite, (req, r
     Number(req.body.sort_order) || acc.sort_order,
     id
   );
-  txn.recalcBalancesLedger = undefined;
   require('../db').recalcBalances(ledgerId);
   auth.audit(req, 'account.update', { entity: 'account', entityId: id, ledgerId });
   res.flash('success', '账户已更新');
@@ -201,11 +200,7 @@ router.post('/categories', auth.requireLogin, auth.requireLedgerWrite, (req, res
   const kind = req.body.kind === 'income' ? 'income' : 'expense';
   if (!name) { res.flash('error', '请填写分类名称'); return res.redirect('/categories'); }
   const parentId = req.body.parent_id ? Number(req.body.parent_id) : null;
-  let color = String(req.body.color || '#8c8c8c');
-  if (parentId) {
-    const p = get('SELECT color FROM categories WHERE id = ?', parentId);
-    if (p && !req.body.color) color = p.color;
-  }
+  const color = u.safeColor(req.body.color || (parentId ? (get('SELECT color FROM categories WHERE id = ?', parentId) || {}).color : null), '#8c8c8c');
   run(
     'INSERT INTO categories (ledger_id, name, kind, parent_id, icon, color, is_system, sort_order) VALUES (?,?,?,?,?,?,0,?)',
     ledgerId, name.slice(0, 20), kind, parentId, req.body.icon || '🏷️', color, 999
@@ -219,12 +214,13 @@ router.post('/categories/:id', auth.requireLogin, auth.requireLedgerWrite, (req,
   const ledgerId = Number(res.locals.ledger.id);
   const id = Number(req.params.id);
   const c = get('SELECT * FROM categories WHERE id = ?', id);
-  if (!c || (c.ledger_id !== null && Number(c.ledger_id) !== ledgerId)) {
+  // 系统内置分类（ledger_id IS NULL）全站共享，一个账本改名会污染所有账本
+  if (!c || c.is_system || c.ledger_id === null || Number(c.ledger_id) !== ledgerId) {
     res.flash('error', '系统内置分类不可修改（可新建自己的分类）');
     return res.redirect('/categories');
   }
   run('UPDATE categories SET name=?, icon=?, color=? WHERE id = ?',
-    String(req.body.name || c.name).slice(0, 20), req.body.icon || c.icon, req.body.color || c.color, id);
+    String(req.body.name || c.name).slice(0, 20), req.body.icon || c.icon, u.safeColor(req.body.color || c.color, c.color), id);
   res.flash('success', '分类已更新');
   res.redirect('/categories');
 });
@@ -270,7 +266,7 @@ router.post('/tags', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
   if (get('SELECT id FROM tags WHERE ledger_id = ? AND name = ?', ledgerId, name)) {
     res.flash('error', '标签已存在'); return res.redirect('/tags');
   }
-  run('INSERT INTO tags (ledger_id, name, color) VALUES (?,?,?)', ledgerId, name.slice(0, 20), req.body.color || u.colorFor(name));
+  run('INSERT INTO tags (ledger_id, name, color) VALUES (?,?,?)', ledgerId, name.slice(0, 20), u.safeColor(req.body.color, u.colorFor(name)));
   res.flash('success', '标签已创建');
   res.redirect('/tags');
 });
@@ -279,7 +275,7 @@ router.post('/tags/:id', auth.requireLogin, auth.requireLedgerWrite, (req, res) 
   const ledgerId = Number(res.locals.ledger.id);
   const id = Number(req.params.id);
   run('UPDATE tags SET name = ?, color = ? WHERE id = ? AND ledger_id = ?',
-    String(req.body.name || '').slice(0, 20), req.body.color || '#4f7cff', id, ledgerId);
+    String(req.body.name || '').slice(0, 20), u.safeColor(req.body.color, '#4f7cff'), id, ledgerId);
   res.flash('success', '标签已更新');
   res.redirect('/tags');
 });

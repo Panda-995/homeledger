@@ -63,6 +63,11 @@ app.set('views', path.join(ROOT, 'src', 'views'));
 app.use(express.urlencoded({ extended: false, limit: '30mb' }));
 app.use(express.json({ limit: '30mb' }));
 app.use('/static', express.static(path.join(ROOT, 'public'), { maxAge: '7d' }));
+// SVG 可内嵌脚本：上传侧已禁止，历史遗留的 .svg 附件也一律不再回显
+app.use('/uploads', (req, res, next) => {
+  if (/\.svg$/i.test(req.path || '')) return res.status(403).end('Forbidden');
+  next();
+});
 app.use('/uploads', express.static(path.join(db.DATA_DIR, 'uploads'), { maxAge: '30d' }));
 
 app.use(
@@ -103,6 +108,7 @@ app.use((req, res, next) => {
   res.locals.assetV = {
     css: APP_VERSION + '-' + assetStamp('css/app.css'),
     js: APP_VERSION + '-' + assetStamp('js/app.js'),
+    assistant: APP_VERSION + '-' + assetStamp('js/assistant.js'),
   };
   res.locals.helpers = util;
   res.locals.charts = charts;

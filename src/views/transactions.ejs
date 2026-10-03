@@ -87,7 +87,7 @@
     <span class="small">结余 <b class="amount <%= (result.sum.income - result.sum.expense) >= 0 ? 'income' : 'expense' %>"><%= helpers.fmtAmount(result.sum.income - result.sum.expense) %></b></span>
   </div>
   <div class="row">
-    <a class="btn btn-sm" href="/export">📤 导出</a>
+    <a class="btn btn-sm" href="/export"><svg class="icon sm"><use href="#i-upload"></use></svg>导出</a>
   </div>
 </div>
 

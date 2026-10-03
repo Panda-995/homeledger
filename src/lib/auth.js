@@ -101,25 +101,35 @@ function loginKey(req, username) {
   const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
   return `${ip}|${String(username || '').toLowerCase()}`;
 }
+/** 仅按用户名的二级限流键：trust proxy 场景下 XFF 可伪造，不能让攻击者靠换 IP 无限爆破同一账号 */
+function userKey(username) {
+  return `u:${String(username || '').toLowerCase()}`;
+}
 function tooManyAttempts(req, username, max = 10) {
-  const k = loginKey(req, username);
-  const rec = attempts.get(k);
-  if (!rec) return 0;
-  if (rec.lockedUntil && rec.lockedUntil > Date.now()) {
-    return Math.ceil((rec.lockedUntil - Date.now()) / 60000);
+  const now = Date.now();
+  for (const k of [loginKey(req, username), userKey(username)]) {
+    const rec = attempts.get(k);
+    if (!rec) continue;
+    if (rec.lockedUntil && rec.lockedUntil > now) {
+      return Math.ceil((rec.lockedUntil - now) / 60000);
+    }
   }
   return 0;
 }
 function recordFailure(req, username, max = 10) {
-  const k = loginKey(req, username);
-  const rec = attempts.get(k) || { count: 0, firstAt: Date.now(), lockedUntil: 0 };
-  if (Date.now() - rec.firstAt > 15 * 60 * 1000) { rec.count = 0; rec.firstAt = Date.now(); }
-  rec.count += 1;
-  if (rec.count >= max) rec.lockedUntil = Date.now() + 10 * 60 * 1000;
-  attempts.set(k, rec);
+  const keys = [loginKey(req, username), userKey(username)];
+  for (const k of keys) {
+    const rec = attempts.get(k) || { count: 0, firstAt: Date.now(), lockedUntil: 0 };
+    if (Date.now() - rec.firstAt > 15 * 60 * 1000) { rec.count = 0; rec.firstAt = Date.now(); }
+    rec.count += 1;
+    // 用户名级阈值放宽 3 倍：正常家庭多设备输错也不会误伤，但换 IP 爆破会撞上这层
+    if (rec.count >= (k.startsWith('u:') ? max * 3 : max)) rec.lockedUntil = Date.now() + 10 * 60 * 1000;
+    attempts.set(k, rec);
+  }
 }
 function clearFailures(req, username) {
   attempts.delete(loginKey(req, username));
+  attempts.delete(userKey(username));
 }
 setInterval(() => {
   const now = Date.now();

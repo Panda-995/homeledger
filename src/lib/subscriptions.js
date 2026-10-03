@@ -236,10 +236,12 @@ function charge(sub, userId, { date = todayStr(), silent = false } = {}) {
  * @returns {{charged:number, renewed:number, notified:number}}
  */
 function runDue(today = todayStr()) {
+  // JOIN ledgers：账本被删除后遗留的「僵尸订阅」不再继续扣费
   const due = all(
-    `SELECT * FROM subscriptions
-     WHERE status IN ('active','trial') AND next_charge_at <= ?
-     ORDER BY next_charge_at, id`,
+    `SELECT s.* FROM subscriptions s
+     JOIN ledgers l ON l.id = s.ledger_id
+     WHERE s.status IN ('active','trial') AND s.next_charge_at <= ?
+     ORDER BY s.next_charge_at, s.id`,
     today
   );
   const stat = { charged: 0, renewed: 0, notified: 0 };

@@ -333,6 +333,40 @@ router.post('/ledgers/:id/archive', auth.requireLogin, auth.requireLedgerManage,
   res.redirect('/ledgers');
 });
 
+/** 账本级联删除：清掉该账本全部数据（附件磁盘文件由调用方收集后另行清理） */
+function deleteLedgerCascade(id) {
+  const files = all('SELECT rel_path FROM attachments WHERE ledger_id = ?', id);
+  const ids = all('SELECT id FROM transactions WHERE ledger_id = ?', id).map((r) => r.id);
+  for (const tid of ids) run('DELETE FROM transaction_tags WHERE transaction_id = ?', tid);
+  run('DELETE FROM splits WHERE ledger_id = ?', id);
+  run('DELETE FROM transactions WHERE ledger_id = ?', id);
+  run('DELETE FROM attachments WHERE ledger_id = ?', id);
+  run('DELETE FROM accounts WHERE ledger_id = ?', id);
+  run('DELETE FROM budgets WHERE ledger_id = ?', id);
+  run('DELETE FROM recurring_rules WHERE ledger_id = ?', id);
+  // 订阅必须随账本删除：否则后台任务会继续给已不存在的账本生成流水
+  run('DELETE FROM subscriptions WHERE ledger_id = ?', id);
+  run('DELETE FROM goals WHERE ledger_id = ?', id);
+  run('DELETE FROM debts WHERE ledger_id = ?', id);
+  run('DELETE FROM tags WHERE ledger_id = ?', id);
+  run('DELETE FROM categories WHERE ledger_id = ?', id);
+  run('DELETE FROM ledger_members WHERE ledger_id = ?', id);
+  run('DELETE FROM ledger_invites WHERE ledger_id = ?', id);
+  run('DELETE FROM import_jobs WHERE ledger_id = ?', id);
+  run('DELETE FROM ledgers WHERE id = ?', id);
+  return files.map((f) => f.rel_path);
+}
+
+/** 尽力清理附件磁盘文件（失败忽略：文件可能已被手工删除） */
+function cleanupUploadFiles(relPaths) {
+  const root = path.join(DATA_DIR, 'uploads');
+  for (const rel of relPaths || []) {
+    const abs = path.resolve(root, String(rel));
+    if (!abs.startsWith(path.resolve(root) + path.sep)) continue;
+    try { fs.unlinkSync(abs); } catch { /* ignore */ }
+  }
+}
+
 router.post('/ledgers/:id/delete', auth.requireLogin, (req, res) => {
   const id = Number(req.params.id);
   const l = get('SELECT * FROM ledgers WHERE id = ? AND owner_id = ?', id, req.session.userId);
@@ -341,24 +375,9 @@ router.post('/ledgers/:id/delete', auth.requireLogin, (req, res) => {
     res.flash('error', '请准确输入账本名称以确认删除');
     return res.redirect('/ledgers');
   }
-  tx(() => {
-    const ids = all('SELECT id FROM transactions WHERE ledger_id = ?', id).map((r) => r.id);
-    for (const tid of ids) run('DELETE FROM transaction_tags WHERE transaction_id = ?', tid);
-    run('DELETE FROM splits WHERE ledger_id = ?', id);
-    run('DELETE FROM transactions WHERE ledger_id = ?', id);
-    run('DELETE FROM attachments WHERE ledger_id = ?', id);
-    run('DELETE FROM accounts WHERE ledger_id = ?', id);
-    run('DELETE FROM budgets WHERE ledger_id = ?', id);
-    run('DELETE FROM recurring_rules WHERE ledger_id = ?', id);
-    run('DELETE FROM goals WHERE ledger_id = ?', id);
-    run('DELETE FROM debts WHERE ledger_id = ?', id);
-    run('DELETE FROM tags WHERE ledger_id = ?', id);
-    run('DELETE FROM categories WHERE ledger_id = ?', id);
-    run('DELETE FROM ledger_members WHERE ledger_id = ?', id);
-    run('DELETE FROM ledger_invites WHERE ledger_id = ?', id);
-    run('DELETE FROM import_jobs WHERE ledger_id = ?', id);
-    run('DELETE FROM ledgers WHERE id = ?', id);
-  });
+  let files = [];
+  tx(() => { files = deleteLedgerCascade(id); });
+  cleanupUploadFiles(files);
   auth.audit(req, 'ledger.delete', { entity: 'ledger', entityId: id, detail: l.name });
   if (Number(req.session.ledgerId) === id) req.session.ledgerId = null;
   res.flash('success', `账本「${l.name}」及其全部数据已删除`);
@@ -691,13 +710,18 @@ router.post('/admin/users/:id', auth.requireLogin, auth.requireAdmin, (req, res)
     }
     case 'delete': {
       const owned = all('SELECT id, name FROM ledgers WHERE owner_id = ?', id);
+      const files = [];
       for (const l of owned) {
         const others = get('SELECT user_id FROM ledger_members WHERE ledger_id = ? AND user_id != ? LIMIT 1', l.id, id);
         if (others) run('UPDATE ledgers SET owner_id = ? WHERE id = ?', others.user_id, l.id);
-        else run('DELETE FROM ledgers WHERE id = ?', l.id);
+        else tx(() => { files.push(...deleteLedgerCascade(l.id)); });
       }
+      cleanupUploadFiles(files);
       run('DELETE FROM ledger_members WHERE user_id = ?', id);
       run('DELETE FROM sessions WHERE user_id = ?', id);
+      // 吊销令牌并清掉站内通知：软删后令牌仍能通过 users JOIN 生效，必须显式吊销
+      run('UPDATE api_tokens SET revoked_at = ? WHERE user_id = ?', nowStr(), id);
+      run('DELETE FROM notifications WHERE user_id = ?', id);
       run("UPDATE users SET status = 'disabled', username = username || '_deleted_' || id WHERE id = ?", id);
       if (String(req.body.hard || '') === '1') run('DELETE FROM users WHERE id = ?', id);
       res.flash('success', '用户已删除（其名下账本已转交或清理）');

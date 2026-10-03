@@ -217,18 +217,21 @@ curl -s "$BASE_URL/models" -H "Authorization: Bearer $API_KEY"
 
 ---
 
-## 四、开放 API：小龙虾（OpenClaw）自动记账
+## 四、开放 API：AI 助手自动记账（OpenClaw / PicoClaw / Hermes Agent）
 
-想**在飞书 / 企业微信 / Telegram 里直接发截图或说一句话就记账**？给飞牛上的小龙虾配一个技能即可，家账簿已内置配套的开放 API。
+想**在飞书 / 企业微信 / Telegram 里直接发截图或说一句话就记账**？给你的 AI 助手配一个技能即可，家账簿已内置配套的开放 API。凡是支持 `SKILL.md`（agentskills.io 标准）的助手都能用：
+
+- **小龙虾 OpenClaw / PicoClaw**：把 `openclaw-skill/homeledger-bookkeeping/` 整个目录放进助手的技能目录（或在技能页导入）
+- **Hermes Agent**（[NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)，兼容 agentskills.io 技能标准）：把 `skills/homeledger-bookkeeping/` 复制到 `~/.hermes/skills/` 下（或并入你的技能仓库），对话中 `/skills` 可见即安装成功；聊天渠道里同样支持直接发截图 / 说"午饭 35"触发记账
 
 **① 生成令牌**：家账簿「设置 → 开放 API」→ 生成新令牌（明文只展示一次）。
 
-**② 安装技能**：把 `openclaw-skill/homeledger-bookkeeping/` 整个目录放进小龙虾的技能目录（或在技能页导入），并在技能配置里填：
+**② 配置技能**（两个平台的技能内容一致，读同样的环境变量）：
 
 - `HOMELEDGER_URL`：家账簿地址，如 `http://<NAS_IP>:5111`
 - `HOMELEDGER_TOKEN`：第①步生成的令牌
 
-**③ 开聊天**：发一张支付截图说"记一下"，或直接说"午饭 35 元"，小龙虾会调 API 自动记账并汇报。
+**③ 开聊天**：发一张支付截图说"记一下"，或直接说"午饭 35 元"，助手会调 API 自动记账并汇报。
 
 开放 API 一览（鉴权均为 `Authorization: Bearer <令牌>`）：
 

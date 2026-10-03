@@ -9,7 +9,7 @@ const u = require('../lib/util');
 
 const router = express.Router();
 
-function parseRange(q) {
+function parseRange(q, ledgerId = 0) {
   const today = todayStr();
   const curMonth = today.slice(0, 7);
   const preset = q.preset || 'month';
@@ -32,7 +32,8 @@ function parseRange(q) {
     };
   }
   if (preset === 'all') {
-    const first = get('SELECT MIN(txn_date) AS d FROM transactions WHERE ledger_id = ?', Number(q.ledger_id) || 0);
+    // 始终用当前会话账本，query 里的 ledger_id 不参与（避免跨账本探测）
+    const first = get('SELECT MIN(txn_date) AS d FROM transactions WHERE ledger_id = ?', Number(ledgerId) || 0);
     return { start: first?.d || `${curMonth}-01`, end: today, label: '全部时间', preset, key: 'all' };
   }
   const month = /^\d{4}-\d{2}$/.test(String(q.month || '')) ? q.month : curMonth;
@@ -43,7 +44,7 @@ router.get('/reports', auth.requireLogin, (req, res) => {
   const ledger = res.locals.ledger;
   if (!ledger) return res.redirect('/');
   const ledgerId = Number(ledger.id);
-  const range = parseRange(req.query);
+  const range = parseRange(req.query, ledgerId);
   const kind = req.query.kind === 'income' ? 'income' : 'expense';
 
   const sum = txn.summary(ledgerId, range.start, range.end);
@@ -56,7 +57,6 @@ router.get('/reports', auth.requireLogin, (req, res) => {
   const overview = txn.accountOverview(ledgerId);
 
   // 同期对比
-  const monthCount = Number(range.start.slice(0, 4) + (Number(range.start.slice(5, 7)))) ;
   let compare = null;
   if (range.preset === 'month' && range.month) {
     const prevMonth = u.addMonths(range.month, -1);

@@ -39,6 +39,176 @@
     });
   }
 
+  /* ------------------------ 自定义下拉框（桌面端） ------------------------ */
+  /* 原生 select 保留在 DOM（隐藏）负责取值与提交；触发态由 .hl-select 渲染。
+     触屏设备保持原生选择器（系统滚轮更好用），加 data-native 可强制跳过增强。 */
+  function isTouch() {
+    return window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  }
+
+  function optionLabel(opt) {
+    return (opt ? opt.textContent : '').replace(/\s+/g, ' ').trim();
+  }
+
+  function enhanceSelect(sel) {
+    if (sel.dataset.hlEnhanced || sel.multiple || sel.closest('.hl-select')) return;
+    sel.dataset.hlEnhanced = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'hl-select';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.classList.add('hidden');
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'hl-select-trigger';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.innerHTML =
+      '<span class="hl-select-label"></span>' +
+      '<span class="hl-select-caret"><svg class="icon sm"><use href="#i-chevron-down"></use></svg></span>';
+    // 禁用下拉（如「成员」占位）保留可见但不可展开，避免留下空白缺口
+    if (sel.disabled) { btn.disabled = true; wrap.classList.add('hl-disabled'); }
+    wrap.appendChild(btn);
+    const labelEl = $('.hl-select-label', btn);
+
+    let open = false;
+    // 菜单容器懒创建：未展开时不渲染空壳，避免页面残留空白胶囊
+    let menu = null;
+    function ensureMenu() {
+      if (menu) return menu;
+      menu = document.createElement('div');
+      menu.className = 'hl-select-menu';
+      menu.setAttribute('role', 'listbox');
+      menu.addEventListener('keydown', onMenuKey);
+      wrap.appendChild(menu);
+      return menu;
+    }
+
+    function renderLabel() {
+      const opt = sel.options[sel.selectedIndex];
+      labelEl.textContent = optionLabel(opt);
+      labelEl.classList.toggle('ph', !sel.value);
+    }
+
+    function buildMenu() {
+      menu.innerHTML = '';
+      let empty = true;
+      const addOpt = (opt) => {
+        if (!opt) return;
+        empty = false;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'hl-select-opt' + (opt.selected ? ' selected' : '');
+        b.setAttribute('role', 'option');
+        b.innerHTML = '<span>' + esc(optionLabel(opt)) + '</span>' +
+          '<svg class="icon sm checkmark"><use href="#i-check"></use></svg>';
+        b.addEventListener('click', () => {
+          if (sel.value !== opt.value) {
+            sel.value = opt.value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          toggle(false);
+          btn.focus();
+        });
+        menu.appendChild(b);
+      };
+      Array.prototype.forEach.call(sel.children, (child) => {
+        if (child.tagName === 'OPTGROUP') {
+          const g = document.createElement('div');
+          g.className = 'hl-select-group';
+          g.textContent = child.label;
+          menu.appendChild(g);
+          Array.prototype.forEach.call(child.children, addOpt);
+        } else if (child.tagName === 'OPTION') {
+          addOpt(child);
+        }
+      });
+      if (empty) menu.innerHTML = '<div class="hl-select-empty">暂无可选项</div>';
+    }
+
+    function place() {
+      menu.classList.remove('up');
+      const r = wrap.getBoundingClientRect();
+      if (window.innerHeight - r.bottom < Math.min(320, menu.scrollHeight + 12) && r.top > menu.scrollHeight + 12) {
+        menu.classList.add('up');
+      }
+    }
+
+    function toggle(force) {
+      const want = force === undefined ? !open : force;
+      if (want === open || btn.disabled) return;
+      open = want;
+      if (open) {
+        $$('body .hl-select.open').forEach((w) => { if (w !== wrap) w.classList.remove('open'); });
+        ensureMenu();
+        buildMenu();
+        wrap.classList.add('open');
+        place();
+        const cur = $('.hl-select-opt.selected', menu) || $('.hl-select-opt', menu);
+        if (cur) cur.focus();
+      } else {
+        wrap.classList.remove('open');
+      }
+    }
+
+    function onMenuKey(e) {
+      const opts = $$('.hl-select-opt', menu);
+      const idx = opts.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); toggle(false); btn.focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); const n = opts[idx + 1] || opts[0]; if (n) n.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); const n = opts[idx - 1] || opts[opts.length - 1]; if (n) n.focus(); }
+      else if (e.key === 'Tab') { toggle(false); }
+    }
+
+    btn.addEventListener('click', () => toggle());
+    btn.addEventListener('keydown', (e) => {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); toggle(true); }
+    });
+    document.addEventListener('click', (e) => { if (open && !wrap.contains(e.target)) toggle(false); });
+    window.addEventListener('resize', () => { if (open) place(); });
+    sel.addEventListener('change', renderLabel);
+    // 外部脚本改 innerHTML / value 后调用 sel._hlRefresh() 同步触发态
+    sel._hlRefresh = () => { renderLabel(); if (open) buildMenu(); };
+
+    renderLabel();
+  }
+
+  function enhanceSelects(root) {
+    if (isTouch()) return;
+    $$('select:not([data-native])', root || document).forEach(enhanceSelect);
+  }
+  window.hlEnhanceSelects = enhanceSelects;
+
+  /* ------------------------------ 确认弹窗 ------------------------------ */
+  function hlConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      const mask = document.createElement('div');
+      mask.className = 'modal-mask';
+      const danger = !!opts.danger;
+      mask.innerHTML =
+        '<div class="modal' + (danger ? ' danger' : '') + '" role="alertdialog" aria-modal="true">' +
+          '<div class="modal-title"><svg class="icon"><use href="#' + (danger ? 'i-triangle-alert' : 'i-circle-alert') + '"></use></svg>' + esc(opts.title || (danger ? '危险操作' : '请确认')) + '</div>' +
+          '<div class="modal-body">' + esc(message) + '</div>' +
+          '<div class="modal-actions">' +
+            '<button type="button" class="btn btn-ghost" data-act="cancel">' + esc(opts.cancelText || '取消') + '</button>' +
+            '<button type="button" class="btn ' + (danger ? 'btn-danger' : 'btn-primary') + '" data-act="ok">' + esc(opts.okText || '确定') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(mask);
+      const done = (val) => { mask.remove(); document.removeEventListener('keydown', onKey); resolve(val); };
+      const onKey = (e) => { if (e.key === 'Escape') done(false); };
+      mask.addEventListener('click', (e) => {
+        if (e.target === mask) return done(false);
+        const act = e.target.closest && e.target.closest('[data-act]');
+        if (act) done(act.dataset.act === 'ok');
+      });
+      document.addEventListener('keydown', onKey);
+      ($('[data-act="' + (danger ? 'cancel' : 'ok') + '"]', mask) || {}).focus && $('[data-act="' + (danger ? 'cancel' : 'ok') + '"]', mask).focus();
+    });
+  }
+  window.hlConfirm = hlConfirm;
+
   async function postJson(url, body) {
     const res = await fetch(url, {
       method: 'POST',
@@ -278,9 +448,11 @@
           const k = e.target.value === 'income' ? 'income' : 'expense';
           catSel.innerHTML = '<option value="">未分类</option>' + cfg.categories.filter((c) => c.kind === k)
             .map((c) => '<option value="' + c.id + '">' + esc(c.path) + '</option>').join('');
+          if (catSel._hlRefresh) catSel._hlRefresh();
         });
         $('.draft-del', card).addEventListener('click', () => card.remove());
       });
+      if (window.hlEnhanceSelects) window.hlEnhanceSelects(resultBox);
 
       const clearBtn = $('#ai-clear');
       if (clearBtn) clearBtn.addEventListener('click', () => {
@@ -539,9 +711,8 @@
       restoreInput.addEventListener('change', async () => {
         const f = restoreInput.files[0];
         if (!f) return;
-        if (!confirm('确定要用该备份覆盖当前数据吗？\n当前数据会自动先备份一份，但仍建议你手动下载一份当前数据。')) {
-          restoreInput.value = ''; return;
-        }
+        const okGo = await hlConfirm('确定要用该备份覆盖当前数据吗？\n当前数据会自动先备份一份，但仍建议你手动下载一份当前数据。', { danger: true, okText: '覆盖恢复', title: '恢复备份' });
+        if (!okGo) { restoreInput.value = ''; return; }
         const dataUrl = await fileToDataUrl(f);
         const res = await postJson('/backup/restore', { dataUrl });
         toast(res.ok ? '已接收，请按提示完成恢复' : '失败：' + res.error, res.ok ? 'success' : 'error');
@@ -578,7 +749,15 @@
   function initConfirm() {
     $$('form[data-confirm]').forEach((f) => {
       f.addEventListener('submit', (e) => {
-        if (!confirm(f.dataset.confirm)) e.preventDefault();
+        if (f._confirmPass) { f._confirmPass = false; return; }
+        e.preventDefault();
+        const msg = f.dataset.confirm || '确定执行该操作？';
+        const danger = /删除|清空|吊销|重置|⚠️|覆盖/.test(msg);
+        hlConfirm(msg, { danger }).then((ok) => {
+          if (!ok) return;
+          f._confirmPass = true;
+          if (e.submitter) f.requestSubmit(e.submitter); else f.requestSubmit();
+        });
       });
     });
   }
@@ -604,7 +783,7 @@
     $$('[data-del-txn]').forEach((btn) => {
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
-        if (!confirm('删除这笔记录？')) return;
+        if (!(await hlConfirm('删除这笔记录？', { danger: true, okText: '删除' }))) return;
         const res = await postJson('/transactions/' + btn.dataset.delTxn + '/delete', { _json: '1' });
         if (res.ok) {
           const row = btn.closest('.txn');
@@ -719,5 +898,8 @@
     initLightbox();
     initListActions();
     initNumberInputs();
+    enhanceSelects();
+    // 记一笔/编辑页本身就是记账界面，AI 悬浮球会遮挡底部按钮，不出现
+    if ($('#txn-form')) { const f = $('#aiFab'); if (f) f.remove(); }
   });
 })();

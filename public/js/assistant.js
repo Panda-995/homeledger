@@ -38,6 +38,9 @@
     fab.classList.remove('hidden');
   }
   fab.addEventListener('click', open);
+  // 桌面端顶栏入口（悬浮球仅移动端显示）
+  const topBtn = document.getElementById('aiTopBtn');
+  if (topBtn) topBtn.addEventListener('click', open);
   $('aiClose').addEventListener('click', close);
   $('aiClear').addEventListener('click', () => {
     while (msgs.children.length > 1) msgs.removeChild(msgs.lastChild);

@@ -1,7 +1,7 @@
 <script>
   window.__AI_FORM__ = {
-    categories: <%- JSON.stringify(form.expenseCats.concat(form.incomeCats).map(function(c){ return { id: c.id, name: c.name, path: c.parent_id ? c.path : c.name, kind: c.kind }; })) %>,
-    accounts: <%- JSON.stringify(form.accounts.map(function(a){ return { id: a.id, name: a.name, icon: a.icon }; })) %>
+    categories: <%- helpers.jsonForScript(form.expenseCats.concat(form.incomeCats).map(function(c){ return { id: c.id, name: c.name, path: c.parent_id ? c.path : c.name, kind: c.kind }; })) %>,
+    accounts: <%- helpers.jsonForScript(form.accounts.map(function(a){ return { id: a.id, name: a.name, icon: a.icon }; })) %>
   };
 </script>
 
@@ -43,7 +43,7 @@
       </div>
 
       <div class="row">
-        <button class="btn btn-primary btn-lg" id="ai-scan-btn" type="button" disabled>🤖 开始识别</button>
+        <button class="btn btn-primary btn-lg" id="ai-scan-btn" type="button" disabled><svg class="icon"><use href="#i-sparkles"></use></svg>开始识别</button>
         <a class="btn btn-lg" href="/transactions/new">手动记一笔</a>
       </div>
     </div>

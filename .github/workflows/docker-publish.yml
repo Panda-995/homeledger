@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -18,6 +17,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # GHCR 镜像名必须全小写；fork 后仓库属主（如 Panda-995）含大写会直接推送失败
+      - name: Compute lowercase image name
+        id: image
+        run: echo "name=${REGISTRY}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -36,7 +40,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ steps.image.outputs.name }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

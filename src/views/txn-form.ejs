@@ -43,14 +43,14 @@
         <div class="row between mb12">
           <div class="type-tabs" style="flex:1">
             <% typeList.forEach(function(x){ %>
-              <button type="button" data-type="<%= x.key %>" class="<%= cur === x.key ? 'active' : '' %>"><%= x.icon %> <%= x.label %></button>
+              <button type="button" data-type="<%= x.key %>" class="<%= cur === x.key ? 'active' : '' %>"><%= x.label %></button>
             <% }); %>
           </div>
         </div>
         <div class="row mb16" style="gap:6px;flex-wrap:wrap">
           <span class="tiny muted">更多类型：</span>
           <% moreTypes.forEach(function(x){ %>
-            <button type="button" class="chip <%= cur === x.key ? 'primary' : '' %>" data-type="<%= x.key %>"><%= x.icon %> <%= x.label %></button>
+            <button type="button" class="chip <%= cur === x.key ? 'primary' : '' %>" data-type="<%= x.key %>"><%= x.label %></button>
           <% }); %>
         </div>
 
@@ -244,7 +244,7 @@
 <script>
 (function(){
   // 类型相关的字段显隐（服务端已渲染，JS 仅做交互增强）
-  var curType = <%- JSON.stringify(cur) %>;
+  var curType = <%- helpers.jsonForScript(cur) %>;
   function applyType(type){
     document.querySelectorAll('[data-for-type]').forEach(function(el){
       el.classList.toggle('hidden', !el.dataset.forType.split(',').includes(type));

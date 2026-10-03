@@ -11,3 +11,4 @@ dist/
 *-out.txt
 ui-*.png
 _cc.txt
+.screenshots/

@@ -45,7 +45,12 @@ function parseDataUrl(dataUrl) {
   const m = /^data:([^;]+);base64,(.+)$/s.exec(String(dataUrl || '').trim());
   if (!m) throw new Error('图片格式无法识别（需要 data:image/...;base64,xxx）');
   const mime = m[1].toLowerCase().split(';')[0];
-  if (!mime.startsWith('image/')) throw new Error(`不支持的图片类型：${mime}`);
+  // 只接受白名单位图格式：SVG 可内嵌脚本，若允许上传，
+  // 经 /uploads 与 /api/open/attachments 回显时会在同源执行任意 JS（存储型 XSS）
+  if (!MIME_EXT[mime]) {
+    if (mime.startsWith('image/')) throw new Error(`不支持的图片类型：${mime}（SVG 存在脚本风险，已禁止）`);
+    throw new Error(`不支持的图片类型：${mime}`);
+  }
   const buf = Buffer.from(m[2], 'base64');
   if (!buf.length) throw new Error('图片内容为空');
   if (buf.length > MAX_IMAGE_BYTES) throw new Error('单张图片请小于 8MB');
@@ -164,6 +169,12 @@ function resolveFile(ledgerId, id) {
   return { abs, row };
 }
 
+/** 附件回显时的安全 Content-Type：库里记录的 mime 只允许位图白名单，其余按二进制流下发 */
+function safeMime(mime) {
+  const m = String(mime || '').toLowerCase();
+  return MIME_EXT[m] ? m : 'application/octet-stream';
+}
+
 /** 删除附件：先删文件再删行 */
 function removeById(ledgerId, id) {
   const row = get('SELECT * FROM attachments WHERE id = ? AND ledger_id = ?', Number(id), Number(ledgerId));
@@ -179,7 +190,7 @@ function removeById(ledgerId, id) {
 
 module.exports = {
   MIME_EXT, MAX_IMAGE_BYTES, MAX_IMAGES,
-  uploadsRoot, webUrl, parseDataUrl,
+  uploadsRoot, webUrl, parseDataUrl, safeMime,
   saveDataUrlImage, linkImagesToTxns,
   listByTxnIds, listByTxn, countByTxnIds, attachCounts,
   getById, resolveFile, removeById,

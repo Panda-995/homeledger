@@ -11,7 +11,8 @@ const USERNAME_RE = /^[A-Za-z0-9_.@-]{3,32}$/;
 
 function safeNext(next) {
   if (!next || typeof next !== 'string') return '/';
-  if (!next.startsWith('/') || next.startsWith('//')) return '/';
+  // 反斜杠会被浏览器规范化为 /："/\evil.com" 等价 "//evil.com"，必须一并拦截
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
   return next;
 }
 

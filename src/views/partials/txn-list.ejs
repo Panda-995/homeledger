@@ -60,8 +60,8 @@
             <% if (t.currency !== 'CNY') { %><div class="tiny muted"><%= t.currency %></div><% } %>
           </div>
           <div class="txn-act">
-            <a class="btn btn-sm btn-ghost" href="/transactions/<%= t.id %>/edit" title="编辑">✏️</a>
-            <button class="btn btn-sm btn-ghost" type="button" data-del-txn="<%= t.id %>" title="删除">🗑️</button>
+            <a class="btn btn-sm btn-ghost" href="/transactions/<%= t.id %>/edit" title="编辑" aria-label="编辑"><svg class="icon sm"><use href="#i-pencil"></use></svg></a>
+            <button class="btn btn-sm btn-ghost" type="button" data-del-txn="<%= t.id %>" title="删除" aria-label="删除"><svg class="icon sm"><use href="#i-trash-2"></use></svg></button>
           </div>
         </div>
       <% }); %>

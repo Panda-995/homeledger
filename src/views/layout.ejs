@@ -4,19 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf" content="<%= csrf %>">
-<meta name="theme-color" content="#4f7cff">
+<meta name="theme-color" content="#3d6df5">
 <meta name="color-scheme" content="light dark">
 <title><%= title ? title + ' · ' + siteName : siteName %></title>
 <link rel="stylesheet" href="/static/css/app.css?v=<%= assetV.css %>">
 <link rel="manifest" href="/static/manifest.webmanifest">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📒</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233d6df5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M19 5v14H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2Z'/><path d='M8 3v18'/><path d='M13 8h3'/><path d='M13 12h3'/></svg>">
 </head>
 <body>
+<%- include('partials/icons') %>
 <div class="shell">
 
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-logo">📒</div>
+      <div class="brand-logo"><svg class="icon"><use href="#i-wallet"></use></svg></div>
       <div><%= siteName %></div>
     </div>
 
@@ -36,53 +37,55 @@
     <nav>
       <div class="nav-group">
         <div class="nav-title">记账</div>
-        <a class="nav-item <%= activeNav === 'home' ? 'active' : '' %>" href="/"><span class="ico">🏠</span>总览</a>
-        <a class="nav-item <%= activeNav === 'new' ? 'active' : '' %>" href="/transactions/new"><span class="ico">✏️</span>记一笔</a>
-        <a class="nav-item <%= activeNav === 'transactions' ? 'active' : '' %>" href="/transactions"><span class="ico">📋</span>账单明细</a>
-        <a class="nav-item <%= activeNav === 'calendar' ? 'active' : '' %>" href="/calendar"><span class="ico">🗓️</span>记账日历</a>
-        <a class="nav-item <%= activeNav === 'ai' ? 'active' : '' %>" href="/ai"><span class="ico">🤖</span>AI 截图记账</a>
+        <a class="nav-item <%= activeNav === 'home' ? 'active' : '' %>" href="/"><svg class="icon"><use href="#i-house"></use></svg>总览</a>
+        <a class="nav-item <%= activeNav === 'new' ? 'active' : '' %>" href="/transactions/new"><svg class="icon"><use href="#i-pencil"></use></svg>记一笔</a>
+        <a class="nav-item <%= activeNav === 'transactions' ? 'active' : '' %>" href="/transactions"><svg class="icon"><use href="#i-list"></use></svg>账单明细</a>
+        <a class="nav-item <%= activeNav === 'calendar' ? 'active' : '' %>" href="/calendar"><svg class="icon"><use href="#i-calendar-days"></use></svg>记账日历</a>
+        <a class="nav-item <%= activeNav === 'ai' ? 'active' : '' %>" href="/ai"><svg class="icon"><use href="#i-bot"></use></svg>AI 截图记账</a>
       </div>
 
       <div class="nav-group">
         <div class="nav-title">分析</div>
-        <a class="nav-item <%= activeNav === 'reports' ? 'active' : '' %>" href="/reports"><span class="ico">📊</span>报表分析</a>
-        <a class="nav-item <%= activeNav === 'search' ? 'active' : '' %>" href="/search"><span class="ico">🔍</span>搜索筛选</a>
+        <a class="nav-item <%= activeNav === 'reports' ? 'active' : '' %>" href="/reports"><svg class="icon"><use href="#i-chart-column"></use></svg>报表分析</a>
+        <a class="nav-item <%= activeNav === 'search' ? 'active' : '' %>" href="/search"><svg class="icon"><use href="#i-search"></use></svg>搜索筛选</a>
       </div>
 
       <div class="nav-group">
         <div class="nav-title">资产与计划</div>
-        <a class="nav-item <%= activeNav === 'accounts' ? 'active' : '' %>" href="/accounts"><span class="ico">💳</span>账户管理</a>
-        <a class="nav-item <%= activeNav === 'budgets' ? 'active' : '' %>" href="/budgets"><span class="ico">🎯</span>预算管理</a>
-        <a class="nav-item <%= activeNav === 'recurring' ? 'active' : '' %>" href="/recurring"><span class="ico">🔁</span>周期账单</a>
-        <a class="nav-item <%= activeNav === 'subscriptions' ? 'active' : '' %>" href="/subscriptions"><span class="ico">🧾</span>订阅扣费</a>
-        <a class="nav-item <%= activeNav === 'debts' ? 'active' : '' %>" href="/debts"><span class="ico">🤝</span>借贷台账</a>
-        <a class="nav-item <%= activeNav === 'goals' ? 'active' : '' %>" href="/goals"><span class="ico">🐖</span>储蓄目标</a>
+        <a class="nav-item <%= activeNav === 'accounts' ? 'active' : '' %>" href="/accounts"><svg class="icon"><use href="#i-credit-card"></use></svg>账户管理</a>
+        <a class="nav-item <%= activeNav === 'budgets' ? 'active' : '' %>" href="/budgets"><svg class="icon"><use href="#i-target"></use></svg>预算管理</a>
+        <a class="nav-item <%= activeNav === 'recurring' ? 'active' : '' %>" href="/recurring"><svg class="icon"><use href="#i-repeat"></use></svg>周期账单</a>
+        <a class="nav-item <%= activeNav === 'subscriptions' ? 'active' : '' %>" href="/subscriptions"><svg class="icon"><use href="#i-receipt"></use></svg>订阅扣费</a>
+        <a class="nav-item <%= activeNav === 'debts' ? 'active' : '' %>" href="/debts"><svg class="icon"><use href="#i-hand-coins"></use></svg>借贷台账</a>
+        <a class="nav-item <%= activeNav === 'goals' ? 'active' : '' %>" href="/goals"><svg class="icon"><use href="#i-piggy-bank"></use></svg>储蓄目标</a>
       </div>
 
       <div class="nav-group">
         <div class="nav-title">数据</div>
-        <a class="nav-item <%= activeNav === 'categories' ? 'active' : '' %>" href="/categories"><span class="ico">🏷️</span>分类管理</a>
-        <a class="nav-item <%= activeNav === 'tags' ? 'active' : '' %>" href="/tags"><span class="ico">🔖</span>标签管理</a>
-        <a class="nav-item <%= activeNav === 'import' ? 'active' : '' %>" href="/import"><span class="ico">📥</span>账单导入</a>
-        <a class="nav-item <%= activeNav === 'export' ? 'active' : '' %>" href="/export"><span class="ico">📤</span>导出备份</a>
+        <a class="nav-item <%= activeNav === 'categories' ? 'active' : '' %>" href="/categories"><svg class="icon"><use href="#i-tag"></use></svg>分类管理</a>
+        <a class="nav-item <%= activeNav === 'tags' ? 'active' : '' %>" href="/tags"><svg class="icon"><use href="#i-tags"></use></svg>标签管理</a>
+        <a class="nav-item <%= activeNav === 'import' ? 'active' : '' %>" href="/import"><svg class="icon"><use href="#i-download"></use></svg>账单导入</a>
+        <a class="nav-item <%= activeNav === 'export' ? 'active' : '' %>" href="/export"><svg class="icon"><use href="#i-upload"></use></svg>导出备份</a>
       </div>
 
       <div class="nav-group">
         <div class="nav-title">协作与系统</div>
-        <a class="nav-item <%= activeNav === 'ledgers' ? 'active' : '' %>" href="/ledgers"><span class="ico">📚</span>账本管理</a>
-        <a class="nav-item <%= activeNav === 'members' ? 'active' : '' %>" href="/members"><span class="ico">👨‍👩‍👧</span>成员权限</a>
+        <a class="nav-item <%= activeNav === 'ledgers' ? 'active' : '' %>" href="/ledgers"><svg class="icon"><use href="#i-library"></use></svg>账本管理</a>
+        <a class="nav-item <%= activeNav === 'members' ? 'active' : '' %>" href="/members"><svg class="icon"><use href="#i-users-round"></use></svg>成员权限</a>
         <a class="nav-item <%= activeNav === 'notifications' ? 'active' : '' %>" href="/notifications">
-          <span class="ico">🔔</span>通知中心
+          <svg class="icon"><use href="#i-bell"></use></svg>通知中心
           <% if (unreadCount) { %><span class="count"><%= unreadCount %></span><% } %>
         </a>
-        <a class="nav-item <%= activeNav === 'settings' ? 'active' : '' %>" href="/settings"><span class="ico">⚙️</span>设置</a>
-        <a class="nav-item <%= activeNav === 'about' ? 'active' : '' %>" href="/about"><span class="ico">ℹ️</span>关于</a>
+        <a class="nav-item <%= activeNav === 'settings' ? 'active' : '' %>" href="/settings"><svg class="icon"><use href="#i-settings"></use></svg>设置</a>
+        <a class="nav-item <%= activeNav === 'about' ? 'active' : '' %>" href="/about"><svg class="icon"><use href="#i-info"></use></svg>关于</a>
       </div>
     </nav>
 
     <div class="sidebar-foot">
       <div class="row" style="gap:6px">
-        <a class="btn btn-sm btn-ghost" href="/theme/<%= (user && user.theme) === 'dark' ? 'light' : 'dark' %>" title="切换主题"><%= (user && user.theme) === 'dark' ? '☀️' : '🌙' %></a>
+        <a class="btn btn-sm btn-icon btn-ghost" href="/theme/<%= (user && user.theme) === 'dark' ? 'light' : 'dark' %>" title="切换主题" aria-label="切换主题">
+          <% if ((user && user.theme) === 'dark') { %><svg class="icon sm"><use href="#i-sun"></use></svg><% } else { %><svg class="icon sm"><use href="#i-moon"></use></svg><% } %>
+        </a>
         <span class="spacer"></span>
         <span class="tiny muted"><%= user ? '@' + user.username : '' %></span>
       </div>
@@ -95,17 +98,20 @@
         <h1><%= title || '' %></h1>
         <% if (typeof sub !== 'undefined' && sub) { %><div class="sub"><%= sub %></div><% } %>
       </div>
-      <a class="btn btn-sm" href="/search" title="搜索">🔍</a>
-      <a class="btn btn-sm btn-primary" href="/transactions/new">＋ 记一笔</a>
+      <a class="btn btn-sm btn-icon" href="/search" title="搜索" aria-label="搜索"><svg class="icon sm"><use href="#i-search"></use></svg></a>
+      <a class="btn btn-sm btn-primary" href="/transactions/new"><svg class="icon sm"><use href="#i-plus"></use></svg>记一笔</a>
+      <% if (ledger && canWrite(ledger.role)) { %>
+        <button id="aiTopBtn" class="btn btn-sm btn-icon" type="button" title="AI 记账助手" aria-label="AI 记账助手"><svg class="icon sm"><use href="#i-bot"></use></svg></button>
+      <% } %>
       <div class="user-menu" id="userMenu">
         <button class="user-menu-btn" type="button" id="userMenuBtn" aria-haspopup="true">
           <% if (helpers.avatarUrl(user)) { %>
             <img id="userMenuAvatar" class="avatar avatar-img avatar-click" src="<%= helpers.avatarUrl(user) %>" alt="" title="点击更换头像">
           <% } else { %>
-            <span id="userMenuAvatar" class="avatar avatar-click" style="background:<%= user ? user.avatar_color : '#4f7cff' %>" title="点击更换头像"><%= helpers.initials(user ? user.display_name : '?') %></span>
+            <span id="userMenuAvatar" class="avatar avatar-click" style="background:<%= user ? user.avatar_color : '#3d6df5' %>" title="点击更换头像"><%= helpers.initials(user ? user.display_name : '?') %></span>
           <% } %>
           <span class="user-menu-name"><%= user ? user.display_name : '' %></span>
-          <span class="user-menu-caret">▾</span>
+          <span class="caret"><svg class="icon sm"><use href="#i-chevron-down"></use></svg></span>
         </button>
         <%# 全站通用：点头像直接换头像（不进设置页） %>
         <input type="file" id="userAvatarFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
@@ -114,18 +120,18 @@
             <% if (helpers.avatarUrl(user)) { %>
               <img class="avatar avatar-img" src="<%= helpers.avatarUrl(user) %>" alt="">
             <% } else { %>
-              <span class="avatar" style="background:<%= user ? user.avatar_color : '#4f7cff' %>"><%= helpers.initials(user ? user.display_name : '?') %></span>
+              <span class="avatar" style="background:<%= user ? user.avatar_color : '#3d6df5' %>"><%= helpers.initials(user ? user.display_name : '?') %></span>
             <% } %>
             <div>
               <b><%= user ? user.display_name : '' %></b>
               <div class="tiny muted">@<%= user ? user.username : '' %><%= isAdmin ? ' · 管理员' : '' %></div>
             </div>
           </div>
-          <a class="user-menu-item" href="/settings#account"><span>👤</span>个人资料与头像</a>
-          <a class="user-menu-item" href="/settings"><span>⚙️</span>设置</a>
+          <a class="user-menu-item" href="/settings#account"><svg class="icon"><use href="#i-user-round"></use></svg>个人资料与头像</a>
+          <a class="user-menu-item" href="/settings"><svg class="icon"><use href="#i-settings"></use></svg>设置</a>
           <form method="post" action="/logout">
             <input type="hidden" name="_csrf" value="<%= csrf %>">
-            <button class="user-menu-item" type="submit"><span>🚪</span>退出登录</button>
+            <button class="user-menu-item danger" type="submit"><svg class="icon"><use href="#i-log-out"></use></svg>退出登录</button>
           </form>
         </div>
       </div>
@@ -141,25 +147,25 @@
 </div>
 
 <nav class="mobile-nav">
-  <a href="/" class="<%= activeNav === 'home' ? 'active' : '' %>"><span class="ico">🏠</span>总览</a>
-  <a href="/transactions" class="<%= activeNav === 'transactions' ? 'active' : '' %>"><span class="ico">📋</span>明细</a>
-  <a href="/transactions/new" class="fab"><span class="ico">＋</span></a>
-  <a href="/reports" class="<%= activeNav === 'reports' ? 'active' : '' %>"><span class="ico">📊</span>报表</a>
-  <a href="/ai" class="<%= activeNav === 'ai' ? 'active' : '' %>"><span class="ico">🤖</span>AI</a>
+  <a href="/" class="<%= activeNav === 'home' ? 'active' : '' %>"><svg class="icon"><use href="#i-house"></use></svg>总览</a>
+  <a href="/transactions" class="<%= activeNav === 'transactions' ? 'active' : '' %>"><svg class="icon"><use href="#i-list"></use></svg>明细</a>
+  <a href="/transactions/new" class="fab"><svg class="icon"><use href="#i-plus"></use></svg></a>
+  <a href="/reports" class="<%= activeNav === 'reports' ? 'active' : '' %>"><svg class="icon"><use href="#i-chart-column"></use></svg>报表</a>
+  <a href="/ai" class="<%= activeNav === 'ai' ? 'active' : '' %>"><svg class="icon"><use href="#i-bot"></use></svg>AI</a>
 </nav>
 
 <% if (ledger && canWrite(ledger.role)) { %>
-<button id="aiFab" class="ai-fab" type="button" title="AI 记账助手" aria-label="AI 记账助手">🤖</button>
+<button id="aiFab" class="ai-fab" type="button" title="AI 记账助手" aria-label="AI 记账助手"><svg class="icon"><use href="#i-bot"></use></svg></button>
 <section id="aiPanel" class="ai-panel hidden" aria-label="AI 记账助手">
   <header class="ai-head">
-    <span class="ai-head-avatar">🤖</span>
+    <span class="ai-head-avatar"><svg class="icon"><use href="#i-bot"></use></svg></span>
     <div class="ai-head-meta">
       <b>AI 记账助手</b>
       <span id="aiStatus"><%= aiUsable ? 'AI 模型已连接' : '未配置模型 · 规则解析' %></span>
     </div>
     <% if (!aiUsable) { %><a class="btn btn-sm" href="/settings">去配置</a><% } %>
-    <button id="aiClear" class="ai-icon-btn" type="button" title="清空对话">🗑</button>
-    <button id="aiClose" class="ai-icon-btn" type="button" title="收起">✕</button>
+    <button id="aiClear" class="ai-icon-btn" type="button" title="清空对话" aria-label="清空对话"><svg class="icon"><use href="#i-trash-2"></use></svg></button>
+    <button id="aiClose" class="ai-icon-btn" type="button" title="收起" aria-label="收起"><svg class="icon"><use href="#i-x"></use></svg></button>
   </header>
   <div id="aiMsgs" class="ai-msgs">
     <div class="ai-bubble bot">
@@ -168,15 +174,15 @@
   </div>
   <div id="aiThumbs" class="ai-thumbs hidden"></div>
   <footer class="ai-inputbar">
-    <button id="aiAttach" class="ai-icon-btn" type="button" title="添加截图">📎</button>
+    <button id="aiAttach" class="ai-icon-btn" type="button" title="添加截图" aria-label="添加截图"><svg class="icon"><use href="#i-paperclip"></use></svg></button>
     <textarea id="aiText" rows="1" placeholder="例如：午饭 35 元，打车 26.5"></textarea>
-    <button id="aiSend" class="ai-send" type="button" title="发送">➤</button>
+    <button id="aiSend" class="ai-send" type="button" title="发送" aria-label="发送"><svg class="icon"><use href="#i-send"></use></svg></button>
     <input id="aiFile" type="file" accept="image/*" multiple hidden>
   </footer>
 </section>
 <% } %>
 
 <script src="/static/js/app.js?v=<%= assetV.js %>" defer></script>
-<script src="/static/js/assistant.js" defer></script>
+<script src="/static/js/assistant.js?v=<%= assetV.assistant %>" defer></script>
 </body>
 </html>

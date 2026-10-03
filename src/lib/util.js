@@ -272,6 +272,20 @@ function avatarUrl(u) {
   return '/uploads/avatars/' + encodeURIComponent(u.avatar_path) + '?v=' + (Number(u.avatar_ver) || 0);
 }
 
+/**
+ * JSON 序列化为可安全内嵌 <script> 的字符串：
+ * JSON.stringify 不转义 <，用户内容里的 "</script>" 会提前闭合标签造成存储型 XSS。
+ */
+function jsonForScript(v) {
+  return JSON.stringify(v).replace(/</g, '\\u003c').replace(/\u2028|\u2029/g, (m) => '\\u202' + (m === '\u2028' ? '8' : '9'));
+}
+
+/** 颜色白名单校验：只接受 #rgb / #rrggbb，非法值回落到默认色（防 CSS 注入） */
+function safeColor(v, fallback = '#8c8c8c') {
+  const s = String(v || '').trim();
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : fallback;
+}
+
 
 module.exports = {
   currencySymbol, fmtAmount, money, signedMoney, compactMoney, parseAmountToCents,
@@ -279,6 +293,6 @@ module.exports = {
   addDays, addMonths, monthOf, monthStart, monthEnd, daysInMonth,
   monthLabel, monthShort, lastMonths, monthDays, firstWeekday,
   pct, clamp, esc, truncate, colorFor, initials, uid, toBase, barPct,
-  auditAction, auditTarget, auditDetail, avatarUrl,
+  auditAction, auditTarget, auditDetail, avatarUrl, jsonForScript, safeColor,
   PALETTE,
 };

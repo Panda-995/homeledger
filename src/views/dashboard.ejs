@@ -27,8 +27,8 @@
   </div>
   <div class="stat">
     <div class="label">净资产</div>
-    <div class="value amount <%= overview.net >= 0 ? '' : 'expense' %>"><%= helpers.compactMoney(overview.net) %></div>
-    <div class="delta">资产 <%= helpers.compactMoney(overview.assets) %> · 负债 <%= helpers.compactMoney(overview.liabilities) %></div>
+    <div class="value amount <%= overview.net >= 0 ? '' : 'expense' %>"><%= helpers.fmtAmount(overview.net) %></div>
+    <div class="delta">资产 <%= helpers.fmtAmount(overview.assets) %> · 负债 <%= helpers.fmtAmount(overview.liabilities) %></div>
   </div>
 </div>
 
@@ -100,8 +100,8 @@
         </div>
       </div>
       <div class="row">
-        <a class="btn btn-primary btn-block" href="/transactions/new">＋ 记一笔</a>
-        <a class="btn" href="/ai">🤖 截图记账</a>
+        <a class="btn btn-primary btn-block" href="/transactions/new"><svg class="icon sm"><use href="#i-plus"></use></svg>记一笔</a>
+        <a class="btn" href="/ai"><svg class="icon sm"><use href="#i-bot"></use></svg>截图记账</a>
       </div>
     </div>
 
