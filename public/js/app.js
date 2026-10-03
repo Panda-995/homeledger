@@ -146,10 +146,13 @@
 
     function place() {
       menu.classList.remove('up');
+      menu.classList.remove('right');
       const r = wrap.getBoundingClientRect();
       if (window.innerHeight - r.bottom < Math.min(320, menu.scrollHeight + 12) && r.top > menu.scrollHeight + 12) {
         menu.classList.add('up');
       }
+      // 菜单最小 210px：容器右缘贴近视口时改右对齐，避免横向溢出
+      if (r.left + 210 > window.innerWidth - 8) menu.classList.add('right');
     }
 
     function toggle(force) {
@@ -179,9 +182,14 @@
     function onMenuKey(e) {
       const opts = $$('.hl-select-opt', menu);
       const idx = opts.indexOf(document.activeElement);
+      const step = (from, dir) => {
+        let i = from;
+        do { i += dir; } while (i >= 0 && i < opts.length && opts[i].disabled); // 跳过 disabled 项
+        return i >= 0 && i < opts.length ? opts[i] : null;
+      };
       if (e.key === 'Escape') { e.preventDefault(); toggle(false); btn.focus(); }
-      else if (e.key === 'ArrowDown') { e.preventDefault(); const n = opts[idx + 1] || opts[0]; if (n) n.focus(); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); const n = opts[idx - 1] || opts[opts.length - 1]; if (n) n.focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); const n = step(idx, 1) || step(-1, 1); if (n) n.focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); const n = step(idx, -1) || step(-1, -1); if (n) n.focus(); }
       else if (e.key === 'Tab') { toggle(false); }
     }
 
@@ -197,7 +205,13 @@
     if (!document._hlSelectDelegated) {
       document._hlSelectDelegated = true;
       document.addEventListener('click', (e) => {
-        $$('.hl-select.open').forEach((w) => { if (!w.contains(e.target)) w.classList.remove('open'); });
+        $$('.hl-select.open').forEach((w) => {
+          if (!w.contains(e.target)) {
+            w.classList.remove('open');
+            const b = $('.hl-select-trigger', w);
+            if (b) b.setAttribute('aria-expanded', 'false');
+          }
+        });
       });
       window.addEventListener('resize', () => {
         $$('.hl-select.open').forEach((w) => { if (w._hlPlace) w._hlPlace(); });

@@ -207,16 +207,17 @@
 
 <div class="card">
   <div class="card-head"><h2>账户余额一览</h2><a class="btn btn-sm btn-ghost" href="/accounts">管理 →</a></div>
+  <%# 手机端 responsive 规则隐藏第 4+ 列：把「当前余额」放第 3 列保证核心数据可见 %>
   <table class="table responsive">
-    <thead><tr><th>账户</th><th>类型</th><th class="num">初始余额</th><th class="num">当前余额</th><th class="num">占净资产</th></tr></thead>
+    <thead><tr><th>账户</th><th>类型</th><th class="num">当前余额</th><th class="num">初始余额</th><th class="num">占净资产</th></tr></thead>
     <tbody>
       <% var netAbs = overview.accounts.reduce(function(s,a){ return s + Math.abs(Number(a.balance_cents)); }, 0) || 1; %>
       <% overview.accounts.forEach(function(a){ %>
         <tr>
           <td><a href="/accounts/<%= a.id %>"><%= a.icon %> <%= a.name %></a></td>
           <td class="muted small"><%= (ACCOUNT_TYPE_MAP[a.type] || {}).label || a.type %></td>
-          <td class="num muted"><%= helpers.fmtAmount(a.initial_cents) %></td>
           <td class="num amount <%= Number(a.balance_cents) < 0 ? 'expense' : '' %>"><%= helpers.money(a.balance_cents, a.currency) %></td>
+          <td class="num muted"><%= helpers.fmtAmount(a.initial_cents) %></td>
           <td class="num muted"><%= ((Math.abs(Number(a.balance_cents)) / netAbs) * 100).toFixed(1) %>%</td>
         </tr>
       <% }); %>

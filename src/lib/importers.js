@@ -305,7 +305,7 @@ function exportRows(ledgerId, rows) {
     t.txn_date, t.type_label || t.type, (t.amount_cents / 100).toFixed(2), t.currency,
     (t.amount_base_cents / 100).toFixed(2), t.category_path || '', t.account_name || '',
     t.to_account_name || '', t.member_name || '', t.merchant || '', t.note || '',
-    t.tag_names || '', t.source, t.status,
+    t.tag_names || '', t.source, t.status, '', t.type,
   ]);
 }
 

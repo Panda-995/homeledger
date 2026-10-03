@@ -1,33 +1,35 @@
-# 📒 家账簿 HomeLedger
+# 📒 家账簿 HomeLedger（Panda-995 维护版）
 
-**自托管的家庭记账系统**：网页手动记账 + AI 截图/文本自动记账 + 开放 API 对接聊天机器人，所有账目数据都留在你自己的 NAS / 服务器上。
+> 本仓库是 [sucraft-hub/homeledger](https://github.com/sucraft-hub/homeledger) 的 fork。感谢原作者 [@蘇先生](https://github.com/sucraft-hub) 的优秀项目——本仓库在其基础上持续增强：全新 UI/移动端适配、开放 API 全量开放、AI 助手接入、大量安全与功能修复。上游有价值的更新也会酌情同步。
 
-- **全类型记账**：支出 / 收入 / 转账 / 借贷 / 投资 / 报销 / 退款等 14 种交易类型、10 种账户、209 个内置分类，支持多币种与 AA 分账
-- **AI 自动记账**：发一张账单截图或说一句话，自动识别分类、账户、金额后入库，账单原图随记录存档；未配置模型时内置规则引擎兜底，纯离线可用
-- **家庭共享**：多账本、邀请码加入、四档成员角色、报表按成员拆分
-- **理财规划**：预算、周期账单、订阅扣费、借贷台账、储蓄目标，到期与超支自动提醒
-- **报表图表**：收支趋势、净资产曲线、分类构成、日历热力图，服务端 SVG 渲染、完全离线
-- **部署简单**：`docker compose up -d` 一条命令跑通；也支持 `npm start` 直接运行与飞牛 fnOS 原生应用包（.fpk）；单文件 SQLite，备份 = 拷贝 `data/` 目录
-
-技术形态：Node.js 22+ / Express / EJS / `node:sqlite`（Node 内置，无需编译），纯后端服务端渲染，零原生依赖，不依赖任何前端构建工具。
+**自托管的家庭记账系统**：网页手动记账 + AI 截图/文本自动记账 + 开放 API 对接聊天机器人（Hermes / OpenClaw 等），所有账目数据都留在你自己的 NAS / 服务器上。
 
 ---
 
-## 一、快速开始：Docker / Compose 部署（推荐）
+## ✨ 本 fork 的增强（相对源仓库）
 
-### 方式 A：Docker Compose（复制粘贴即可安装）
+| 方向 | 内容 |
+| --- | --- |
+| 🎨 UI/UX | 全新设计体系（浅色/深色）、Lucide 线条图标、桌面端自定义下拉框与确认弹窗 |
+| 📱 移动端 | 汉堡抽屉导航、底部弹层、触控目标加大、筛选横滚、23 页零横向溢出 |
+| 🤖 开放 API | 除令牌管理与跨账本外的全量能力：交易增删改查与批量、账户/分类/标签/借贷/预算/目标/订阅/周期账单、站点与 AI 设置；权限分层 + 频控 + 全量审计 |
+| 🗣️ AI 助手接入 | 内置 Hermes Agent（agentskills.io 标准）与 OpenClaw / PicoClaw 技能包，发截图/说一句话自动记账 |
+| 🔒 安全 | 存储型 XSS、越权、SSRF、时区、备份一致性等 70+ 项修复（详见文末更新记录） |
 
-新建一个空目录，把下面整块内容保存为 `docker-compose.yml`：
+## 🚀 快速开始
+
+新建空目录，保存为 `docker-compose.yml`：
 
 ```yaml
 services:
   homeledger:
-    image: ghcr.milu.moe/panda-995/homeledger:latest   # 本仓库镜像的中转加速源；直连可用 ghcr.io/panda-995/homeledger:latest
+    image: ghcr.milu.moe/panda-995/homeledger:latest   # 加速中转；直连可用 ghcr.io/panda-995/homeledger:latest
     container_name: homeledger
+    user: "0:0"        # 免 chown 方案；或对宿主机 data 目录执行 chown -R 1000:1000 后删掉本行
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
-      SESSION_SECRET: "请改成随机长字符串"
+      SESSION_SECRET: "请改成随机长字符串"     # openssl rand -hex 32
       ADMIN_USER: "admin"
       ADMIN_PASSWORD: "请改成你的强密码"
     ports:
@@ -36,358 +38,75 @@ services:
       - ./data:/data
 ```
 
-然后在同目录执行一条命令：
-
 ```bash
 docker compose up -d
 ```
 
-打开 `http://<NAS或服务器的IP>:5111` 即可使用。
+打开 `http://<NAS或服务器IP>:5111` 即可使用（首次启动自动创建管理员，账号密码即上方环境变量）。
 
-> **权限提示**：容器以非 root 用户（UID 1000）运行。若 `./data` 由 root 创建，首次启动会因无写权限而崩溃重启，请先执行 `mkdir -p data && sudo chown -R 1000:1000 data`，或在 compose 中给服务加 `user: "0:0"`。
+- **升级**：`docker compose pull && docker compose up -d`（数据在 `./data`，升级不丢账）
+- **手机访问**：同一局域网浏览器直接打开，已完整适配移动端
+- 其他部署方式（源码运行 / 飞牛 fnOS 应用包）见源仓库文档，同样适用
 
-| 配置项 | 说明 |
-| --- | --- |
-| `image` | 预构建镜像（本仓库 GitHub Actions 自动发布，`ghcr.milu.moe` 为加速中转，直连可换 `ghcr.io/panda-995/homeledger:latest`），无需本地构建 |
-| `SESSION_SECRET` | 改成随机长字符串（`openssl rand -hex 32`），否则重启后登录态失效 |
-| `ADMIN_USER` / `ADMIN_PASSWORD` | 首次启动自动创建的管理员（仅当库中还没有用户时生效） |
-| `ports` | 左侧为对外访问端口，冲突可改；右侧保持 5111 |
-| `volumes` | 账本数据、截图附件全部落在宿主机 `./data` 目录，**删容器不丢账**，备份就是拷这个目录 |
-| `restart: unless-stopped` | 开机自启、异常自动拉起 |
+## 🗣️ AI 助手自动记账（Hermes / OpenClaw）
 
-### 方式 B：纯 Docker（不想用 Compose）
+1. 「设置 → 开放 API」生成令牌（`hl_` 开头，明文只展示一次）
+2. Hermes：把 `skills/homeledger-bookkeeping/` 复制到 `~/.hermes/skills/`；OpenClaw/PicoClaw：用 `openclaw-skill/homeledger-bookkeeping/`
+3. 技能读 `HOMELEDGER_URL` 与 `HOMELEDGER_TOKEN` 两个环境变量，之后发截图或说"午饭 35"即可自动记账
 
-```bash
-docker run -d --name homeledger --restart unless-stopped -p 5111:5111 \
-  -e TZ=Asia/Shanghai -e SESSION_SECRET="请改成随机长字符串" \
-  -v "$PWD/data:/data" ghcr.milu.moe/panda-995/homeledger:latest
-```
+AI 截图/文本识别使用 OpenAI 兼容接口（智谱 GLM、通义、DeepSeek、本地 Ollama 均可），在「设置 → AI 记账」中配置。
 
-### 方式 C：从源码构建（不想用预构建镜像）
+## 📦 更新记录
 
-```bash
-git clone https://github.com/Panda-995/homeledger.git && cd homeledger
-docker compose up -d          # 默认拉取 ghcr.milu.moe 预构建镜像；想本地构建请注释 image 行并取消 build 行注释
-```
+> 本节随每次发版更新；完整交互式日志见应用内「关于」页。
 
-### 首次启动
+### v1.4.0（2026-10-03）
 
-程序会自动创建管理员，并在控制台打印账号：
+- 📱 **移动端全面适配**：汉堡抽屉导航（全部 23 页手机可达）、触控目标 ≥42px、筛选 chips 横滚、确认弹窗改底部弹层、记一笔卡片重排（主表单→分类→保存）、23 页零横向溢出
+- 🐛 修复下拉框**关闭后选项面板悬浮不消失**的问题（"点开回不去"的根源）
+- 🎨 下拉菜单内容重排：emoji 图标列对齐、余额等副文本右对齐、长文本省略、分组吸顶
+- 🐛 修复余额调整交易显示双负号
+- ✨ 桌面细节：内容入场动效、选区配色、悬停反馈统一
 
-| 用户名 | 密码 |
-| --- | --- |
-| `admin` | `admin888` |
+### v1.3.1（2026-10-03）
 
-> ⚠️ **首次登录后请立即在「设置 → 账号安全」修改密码。**
-> 若要在首次启动时自定义账号，先在目录下建 `.env`（参考 `.env.example`）：
-> ```env
-> ADMIN_USER=你的用户名
-> ADMIN_PASSWORD=你的强密码
-> SESSION_SECRET=一串足够长的随机字符串
-> ```
-> `SESSION_SECRET` 强烈建议修改，否则重启后所有登录态失效（并不影响数据）。
+- 归档账本真正只读；预算口径与报表统一；加入账本改确认页 + POST；导出上限提升；物理删除用户迁移孤儿数据；已取消订阅编辑不复活
 
-### 其他部署方式
+### v1.3.0（2026-10-03）
 
-- **直接运行（本地开发 / 已有 Node 22+ 环境）**：
-  ```bash
-  cd homeledger
-  npm install          # 仅 3 个纯 JS 依赖，80 个包，无原生编译
-  npm start            # 打开 http://localhost:5111
-  ```
-- **飞牛 fnOS 原生应用**：无需 Docker，下载 Releases 里的 `.fpk` 一键安装，见[第五节](#五飞牛-fnos-应用包fpk)
+- 修复周期账单月末锚点跳月（29-31 号规则整月漏记）与年付 2/29 漂移
+- 安全：账本更新/归档越权、邀请码三洞、改密踢会话、账本接任提权
+- 导入：微信「收/支 = /」行正确归入不计收支；导出 CSV 增加机读类型列，回导不再破坏类型
+- 部署：镜像安装 tzdata（TZ 环境变量此前静默失效）
+
+### v1.2.x（2026-10-03）
+
+- 开放 API 全量能力（40+ 端点）+ 权限分层（读/写/站点管理员）+ 频控
+- hermes / OpenClaw 技能包内置；部署源切换 ghcr.milu.moe；CI 加测试门禁
+- 修复订阅改价被吞、AI Key 外发（SSRF）、周期账单 payload 断裂、adjust 负号翻转等
+
+### v1.1.0（2026-10-03）
+
+- UI/UX 全面改版：Lucide 图标、新设计体系、自定义下拉框、确认弹窗
+- 安全修复：存储型 XSS×2、批量操作事务崩溃、余额调整方向反转、开放 API 越权、级联删除等
+
+### v1.0.0（2026-09-25）
+
+- 首个公开发布版本（源仓库）：核心记账、预算、借贷、订阅、AI 记账、开放 API、飞牛应用包
 
 ---
 
-## 二、功能一览
+## 🔒 安全说明
 
-### 记账内核
+- 所有数据存放在本机 `data/` 目录（SQLite + 截图附件），备份 = 拷贝该目录
+- 开放 API 令牌只存 SHA-256 摘要，可随时吊销；权限跟随账本成员关系；写操作全量审计
+- 建议仅在局域网/VPN 内暴露端口；如需公网访问，请置于反向代理之后并启用 HTTPS
 
-- **14 种交易类型**：支出 / 收入 / 转账 / 借出 / 借入 / 还款（收/付）/ 报销 / 退款 / 手续费 / 利息 / 投资买入 / 投资卖出 等
-  - 转账、借贷、投资买卖 **不计入收支统计**，只影响账户余额，统计口径更准确
-- **10 种账户类型**：现金 / 储蓄卡 / 信用卡 / 电子钱包 / 投资 / 应收 / 应付 / 固定资产 / 负债 / 其他
-  - 信用卡支持额度、账单日、还款日
-- **209 个内置分类**（支出 176 + 收入 33），两级树形，可自由增删改
-- **标签**、**商家**、**备注**、**附件凭证**
-- **AA 分账**：一笔消费拆给多个成员，各自承担份额
-- **多币种**：原币金额 + 汇率 + 折算本位币金额
+## 🙏 致谢
 
-### AI 记账
+- 原项目：[sucraft-hub/homeledger](https://github.com/sucraft-hub/homeledger)（作者 @蘇先生，应用内「关于」页保留了原署名与 AI 辅助声明）
+- 图标：[Lucide](https://lucide.dev)（ISC License）
 
-- **站内 AI 小助手**：全站右下角浮动助手，发文字或截图**直接自动记账**（识别 + 入库一步完成），未配置模型时规则引擎兜底
-- **截图记账**：拖拽 / 粘贴 / 选择账单截图 → 视觉大模型识别 → 生成结构化草稿 → 二次确认后入库
-- **截图自动存档**：记账用的账单图会一并保存并关联到对应记录，交易列表有 📎 标记、详情页可回看原图
-- **文本记账**：「晚餐 88 打车 26.5」这类自然语言直接拆成多笔
-- **模型可切换**：设置页一键读取接口的可用模型列表，下拉切换；也可手填任意 OpenAI 兼容模型名
-- **双引擎设计**：
-  - **视觉/文本大模型**：OpenAI 兼容接口，可接智谱 GLM、通义千问、DeepSeek、本地 Ollama
-  - **规则引擎兜底**：**未配置任何 API Key 时自动降级**，靠关键词规则 + 金额/日期正则解析，纯离线可用、零成本
-- 自动推断分类、账户、日期、金额，识别不了的在确认页手动改
+## 📄 许可
 
-### 家庭多人共享
-
-- 一个账本可邀请多名成员，角色分 **所有者 / 管理员 / 成员 / 只读**
-- 邀请码加入，成员可各自记账，报表支持按成员维度拆分
-- 支持多账本切换（个人账本 / 家庭账本 / 旅行账本…）
-
-### 规划与提醒
-
-- **预算**：按月 / 季 / 年设总额或分类预算，周期内实时进度，超支预警
-- **周期账单**：房租、工资等固定收支自动按期记账
-- **订阅扣费**：软件 / 会员 / 云盘 / 服务器的自动续费集中管理
-  - 计费周期支持每周 / 每月 / 每季 / 每半年 / 每年，可设「每 N 期」与扣费日（大小月自动收敛）
-  - 月付与年付**统一摊平成月均**，一眼看出每月固定被扣多少钱、全年合计多少
-  - 到期**自动记账**（`source=subscription`，可在账单明细按「订阅」筛选），也可关掉自动记账改成只提醒
-  - 试用期管理：试用结束前提醒、到期自动转为生效中
-  - 支持暂停 / 恢复 / 跳过本期 / 标记已取消 / 删除，历史扣费记录始终保留
-  - 内置 Netflix、Spotify、iCloud+、ChatGPT Plus 等常用服务快选，一键带出图标与周期
-- **借贷台账**：借出借入登记、还款进度、到期提醒
-- **储蓄目标**：目标金额 + 截止日期 + 进度条
-- **通知中心**：预算预警、账单与订阅到期、借贷逾期、目标达成（同一提醒自动去重，不会重复轰炸）
-
-### 报表与图表
-
-- 收支总览、**净趋势**、**净资产曲线**
-- 分类 / 子分类构成、**成员维度**、**每日分布**
-- 排行条、环形图、柱状图、折线图、**日历热力图**
-- 时间范围预设：本月 / 上月 / 本年 / 自定义区间
-
-### 数据进出
-
-- **导入**：支付宝账单 CSV（自动识别 GBK 编码）、微信支付账单 CSV、通用 CSV
-  - 自动识别来源、映射分类与账户、按「日期+金额+商家」去重
-  - 自动跳过交易关闭 / 已退款 / 失败的记录
-  - **「不计收支」记录单独归类**（提现、充值、零钱通转出等）：默认不导入，可勾选一并导入并记为账户间转账，保证双边平衡
-- **导出**：CSV（带 BOM，Excel 直接打开不乱码）/ JSON 全量导出
-- **备份**：一键下载数据库文件，也支持上传还原
-
-### 其他
-
-- 记账日历（按日查看、热力着色）
-- 全局搜索与多维筛选（类型 / 分类 / 账户 / 成员 / 标签 / 日期 / 关键词 / 报销状态）
-- 批量操作（批量改分类、批量删）
-- 报销台账（标记待报销 / 已报销）
-- 审计日志（谁在什么时候改了什么）
-- 通知中心
-- **关于页**（`/about`）：产品介绍、功能亮点、版本日志、隐私声明、运行环境展示；
-  「提功能需求」一键跳转 GitHub Issues（在 `src/lib/about.js` 的 `GITHUB_REPO`
-  或环境变量 `HOMELEDGER_GITHUB_REPO` 中填入仓库地址即可开启，未配置时按钮置灰）
-- PWA：手机可「添加到主屏幕」，像 App 一样用
-- 浅色 / 深色主题自动跟随系统
-- 移动端适配：底部导航栏 + 悬浮记账按钮
-
----
-
-## 三、配置 AI 识别
-
-登录后进入 **「AI 记账」→ 右上角设置**，填写：
-
-| 项 | 说明 |
-| --- | --- |
-| 服务地址 | OpenAI 兼容的 `base_url`，例如智谱 `https://open.bigmodel.cn/api/paas/v4` |
-| API Key | 你的密钥 |
-| 模型名 | **自由填写，不固定**。填该 `base_url` 支持的任意模型名即可，例如 `glm-4v-flash`、`qwen-vl-plus`、`gpt-4o-mini`、`qwen2.5vl:7b`。截图记账必须填**能读图的视觉模型** |
-| 模型支持图片（视觉） | **截图记账必须勾选**。取消勾选后程序不会把图片发给模型，会提示「当前模型未开启视觉能力」 |
-| 自动入库 | 开启后识别结果直接记账；默认关闭，先出草稿让你确认 |
-
-**不填任何配置也能用** —— 会走内置规则引擎，截图识别不可用，但文本记账和账单 CSV 导入照常工作。
-
-**怎么知道有哪些模型可选？** 模型名旁边有 **「获取可用模型」** 按钮：
-
-1. 填好「接口地址」和「API Key」（没有 Key 的本地模型可留空）→ 点 **获取可用模型**
-2. 程序会读取该接口的模型清单，下拉框里能读图的标 **✅**（按模型名判断，判断不出就不标）
-3. 选中一个即自动填入模型名，并联动勾选/取消「模型支持图片（视觉）」→ 最后点 **保存配置**
-
-同一个网关（one-api / LiteLLM / Ollama 等）通常挂着多个模型，模型名也可以手动填写，不限于清单。
-**换了接口地址就要跟着换模型名。** 也可以直接用命令行看：
-
-```bash
-curl -s "$BASE_URL/models" -H "Authorization: Bearer $API_KEY"
-```
-
-> 列表里的 ✅ 只是按模型名推测（网关不返回模态信息），不确定时以模型文档为准，填好后点「测试连接」验证。
-
-> **报「模型返回 429：访问量过大」？** 免费视觉模型（`glm-4v-flash` 这类）在高峰期经常限流，此时程序会降级为规则解析、截图识别不出来。解决办法：换同一网关下的另一个视觉模型，或稍后重试。
-
-> **报「`type` 参数非法，取值范围 ['text']」？** 说明你填的是**纯文本模型**（如 `glm-4.7-flash`、`deepseek-chat`），它不接受图片。换成视觉模型即可。
-
-> **截图识别报「模型不支持图片 / url cannot be empty」？** 先确认「模型支持图片（视觉）」已勾选，再点「测试连接」核实模型确实能读图（纯文本模型不行，需换成 `glm-4v-flash`、`qwen-vl-plus` 这类视觉模型）。
-
-> 数据安全提示：截图识别会把图片发往你配置的模型服务。若账目敏感，可指向局域网内的 Ollama，数据不出内网。
-
-> **局域网地址 ≠ 一定不用填 Key。** 系统把 `localhost` / `127.0.0.1` / `192.168.*` / `10.*` 视为「本地推理」，允许 Key 留空（直连 Ollama 就是这种）。但如果你在 NAS 上跑的是 one-api、LiteLLM 这类**带鉴权的网关**，仍然必须填 Key —— 否则请求会返回 `401`，界面会提示「该接口需要 API Key」。
-
----
-
-## 四、开放 API：AI 助手自动记账（OpenClaw / PicoClaw / Hermes Agent）
-
-想**在飞书 / 企业微信 / Telegram 里直接发截图或说一句话就记账**？给你的 AI 助手配一个技能即可，家账簿已内置配套的开放 API。凡是支持 `SKILL.md`（agentskills.io 标准）的助手都能用：
-
-- **小龙虾 OpenClaw / PicoClaw**：把 `openclaw-skill/homeledger-bookkeeping/` 整个目录放进助手的技能目录（或在技能页导入）
-- **Hermes Agent**（[NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)，兼容 agentskills.io 技能标准）：把 `skills/homeledger-bookkeeping/` 复制到 `~/.hermes/skills/` 下（或并入你的技能仓库），对话中 `/skills` 可见即安装成功；聊天渠道里同样支持直接发截图 / 说"午饭 35"触发记账
-
-**① 生成令牌**：家账簿「设置 → 开放 API」→ 生成新令牌（明文只展示一次）。
-
-**② 配置技能**（两个平台的技能内容一致，读同样的环境变量）：
-
-- `HOMELEDGER_URL`：家账簿地址，如 `http://<NAS_IP>:5111`
-- `HOMELEDGER_TOKEN`：第①步生成的令牌
-
-**③ 开聊天**：发一张支付截图说"记一下"，或直接说"午饭 35 元"，助手会调 API 自动记账并汇报。
-
-开放 API 一览（鉴权均为 `Authorization: Bearer <令牌>`；权限随令牌：读取=账本成员，写入=可写成员，站点设置=站点管理员；令牌管理不开放，跨账本不可达）：
-
-| 接口 | 用途 |
-| --- | --- |
-| `GET /api/open/ping` | 连通测试，返回账本、角色与站点管理员标识 |
-| `POST /api/open/transactions` | 直接记一笔（支持 `transfer/lend/borrow/repay_*` 及中文类型；分类/账户按名称解析、缺账户自动创建） |
-| `GET /api/open/transactions` | 明细筛选（类型/分类/账户/成员/标签/月份/区间/关键词/分页/排序） |
-| `GET /api/open/transactions/:id` | 单笔详情（含分账与截图） |
-| `POST /api/open/transactions/:id` | 修改一笔（只传要改的字段，其余沿用） |
-| `POST /api/open/transactions/:id/delete`（或 `DELETE`）· `:id/restore` | 删除 / 恢复（软删） |
-| `POST /api/open/transactions/bulk-delete` / `bulk-category` / `bulk-tag` / `bulk-reimburse` | 批量操作（`ids` 数组） |
-| `GET /api/open/summary` · `reports/categories` · `reports/trend` | 区间汇总 / 分类构成 / 收支趋势 |
-| `GET /api/open/accounts` | 账户余额与净资产 |
-| `POST /api/open/accounts` / `:id` / `:id/archive` / `:id/delete` / `:id/adjust` | 账户增改停删与余额调整（差额自动记 adjust） |
-| `GET /api/open/categories` / `tags` · `POST /api/open/categories` / `:id` / `:id/delete` · `tags` / `:id/delete` | 分类与标签管理（系统内置分类只读） |
-| `GET /api/open/debts` · `POST /api/open/debts` / `:id/settle` / `:id/delete` | 借贷台账查询、登记、收还款核销、删除 |
-| `GET /api/open/budgets` · `POST /api/open/budgets` / `:id` / `:id/toggle` / `:id/delete` | 预算管理 |
-| `GET /api/open/goals` · `POST /api/open/goals` / `:id/deposit` / `:id/delete` | 储蓄目标（deposit 负数为取出） |
-| `GET /api/open/subscriptions` · `POST /api/open/subscriptions` / `:id` / `:id/charge` / `:id/skip` / `:id/toggle` / `:id/cancel` / `:id/delete` | 订阅扣费全生命周期 |
-| `GET /api/open/recurring` · `POST /api/open/recurring` / `:id/run` / `:id/toggle` / `:id/delete` | 周期账单管理 |
-| `POST /api/open/ai/bill` | 截图 / 文字识别记账；`confirm:false` 返回草稿，`confirm:true` 直接入库（10 次/分钟） |
-| `GET /api/open/transactions/recent?limit=10` | 最近记账（每笔含 `images`：已关联的账单截图） |
-| `GET /api/open/attachments/:id` | 取回某张账单截图（也可直接访问网页端的 `/uploads/...`） |
-| `GET /api/open/settings` · `POST /api/open/settings/site` / `settings/ai` / `settings/ai/test` · `GET /api/open/ai/models` | 设置读写与 AI 模型管理（仅站点管理员；API Key 永不回显） |
-
-**账单截图会随记录一起存档。** `confirm:true` 入库时，发来的图片会保存到附件库并关联到这批记录上
-（一图一笔则一一对应，否则整组图挂在第一笔），响应里给出对应关系：
-
-```json
-{ "ok": true, "created": 1, "ids": [128],
-  "images": [{ "id": 7, "path": "/uploads/202609/1730f3a2.png", "size": 42813, "txn_id": 128 }] }
-```
-
-- 草稿模式（`confirm:false`）默认**不留档**，避免试探性调用堆积无用图片；需要留档时传 `"save_images": true`
-- 网页端「AI 截图记账 → 识别历史」和「设置旁的『账单截图』」页面可查看全部存档，交易列表有 📎 标记、编辑页可直接看图
-
-安全设计：令牌库中只存 SHA-256 摘要，可随时吊销、即时生效；接口不走网页会话与 CSRF；所有调用记入审计日志。令牌只绑定创建者当前账本，请勿泄露——拿到令牌就能写账。
-
----
-
-## 五、飞牛 fnOS 应用包（.fpk）
-
-无需 Docker，应用内置 Node.js 运行时，以飞牛应用形式安装到系统应用中心：
-
-1. 下载 `.fpk`（见 GitHub Releases，或自行打包：`bash packaging/fpk/build-fpk.sh`）
-2. 飞牛桌面 → **应用中心** → 右上角 **设置** → **手动安装应用** → 选择 `.fpk`
-3. 安装后桌面出现「家账簿」图标，点击在浏览器打开，默认端口 **5111**
-4. 账本数据存放在飞牛托管的应用数据目录（`TRIM_PKGVAR/data`），**升级/覆盖安装不丢数据**；只有卸载（且勾选「清除本地数据」）才会删除 —— 升级请**直接覆盖安装，不要先卸载**
-
-打包细节见 `packaging/fpk/README.md`。
-
----
-
-## 六、备份与迁移
-
-**备份**：整个 `data/` 目录就是全部数据。
-
-```bash
-# 停服务后直接拷贝
-tar -czf homeledger-backup-$(date +%F).tar.gz data/
-```
-
-- Docker 部署：NAS 上的 `./data` 目录
-- 也可在「系统管理 → 备份」里直接下载 `.db` 文件
-- **还原**：停服务 → 用备份覆盖 `data/` → 启动
-
-建议配合 NAS 的快照/同步套件（如飞牛的备份、Hyper Backup）做定期异地备份。
-
----
-
-## 七、安全说明
-
-- 密码用 **scrypt** 加盐哈希存储，不存明文
-- 会话持久化在 SQLite，重启不掉线
-- 全站 **CSRF 令牌**保护所有写操作
-- 登录失败 **限流**，防暴力破解
-- 角色权限（只读 / 成员 / 管理员 / 所有者）在服务端强制校验
-- 建议：**只在局域网内使用**；若要暴露到公网，请套一层反向代理 + HTTPS，并设置 `COOKIE_SECURE=true`
-
----
-
-## 八、目录结构
-
-```
-homeledger/
-├── server.js               # 入口：初始化、中间件、路由挂载、优雅关闭
-├── src/
-│   ├── db.js               # 建表、种子数据、预编译语句、余额重算引擎
-│   ├── lib/
-│   │   ├── auth.js         # scrypt 哈希、会话存储、权限、CSRF、审计、通知
-│   │   ├── txn.js          # 交易写入/查询/统计聚合
-│   │   ├── ai.js           # 双引擎 AI（大模型 + 关键词规则）
-│   │   ├── attachments.js  # 账单截图存档（Web 与开放 API 统一路径）
-│   │   ├── subscriptions.js# 订阅扣费：周期生成、摊平月均、到期提醒
-│   │   ├── importers.js    # 支付宝/微信/通用 CSV 解析与入库
-│   │   ├── charts.js       # 服务端 SVG 图表引擎
-│   │   ├── scheduler.js    # 周期账单、订阅扣费、预算预警、到期提醒
-│   │   ├── about.js        # 关于页数据（仓库地址、版本日志）
-│   │   ├── formdata.js     # 表单下拉数据
-│   │   └── util.js         # 金额/日期/转义工具
-│   ├── routes/             # auth / dashboard / transactions / accounts / planning / subscriptions / ai / reports / admin / about / openapi
-│   └── views/              # EJS 模板（含 layout 布局与 partials）
-├── public/                 # css / js / manifest（PWA）
-├── scripts/                # reset-password.js 密码重置 / seed-demo.js 演示数据
-├── openclaw-skill/         # 小龙虾自动记账技能（对接开放 API）
-├── test/                   # 回归套件（verify-*.js）+ 一键跑批 run-all.js + 静态自检 selfcheck-static.js
-├── data/                   # SQLite 数据库 + 上传的附件（备份就拷这个）
-├── Dockerfile
-└── docker-compose.yml
-```
-
-### 回归测试
-
-改完代码提交前跑一遍（每个套件自动起独立实例、独立数据目录，互不污染）：
-
-```bash
-node test/run-all.js            # 全量 7 套件，约 30 秒，全绿即通过
-node test/selfcheck-static.js   # 静态自检：模板编译 / JS 语法 / 版本一致性 / 悬空引用
-```
-
-单个套件手动跑：先 `PORT=8099 HOST=127.0.0.1 DATA_DIR=<repo>/data-verify node server.js` 起隔离实例，再 `node test/verify-xxx.js`（套件会读 `DATA_DIR` 环境变量核对落盘文件）。
-
----
-
-## 九、常见问题
-
-**Q：端口被占用？**
-改 `.env` 里的 `PORT`，或用 `PORT=9000 npm start`。
-
-**Q：忘记管理员密码？**
-先试默认账号 `admin / admin888`（仅当库里没有用户时才会创建）。改过密码且忘记时，用仓库自带的**密码重置脚本**（数据不会丢）：
-
-```bash
-# 1. 找到数据目录（NAS 上可执行下面这句定位）
-find /vol1 -name homeledger.db 2>/dev/null
-
-# 2. 重置密码（DATA_DIR 指向 homeledger.db 所在目录；node 可用应用内置 runtime/node）
-DATA_DIR=/path/to/data node scripts/reset-password.js admin "新密码"
-```
-
-脚本会更新密码哈希并清除该用户的全部登录会话，立即生效。也可以用 sqlite 工具删除 `users` 表中该记录后重启，程序会重新引导创建默认管理员（账本成员关系会丢失，不推荐）。
-
-**Q：导入后账户余额不对？**
-导入的记录按账单里的「收/付款方式」自动建/匹配账户。若你的账户名和账单里的不一致，请在「账户」里改名对齐后再重新导入，或导入后在账户页手动调整初始余额。
-
-**Q：截图识别一直失败？**
-先确认「AI 记账」设置里的服务地址、Key、模型名是否填对，并且**所选模型支持图片输入**。不配置则只能用文本记账。
-
-报 `401` 且提示「该接口需要 API Key」→ 你的网关要鉴权，去设置里补 Key。
-报「接口地址或模型名含有非法字符」→ 复制粘贴时带进了中文或全角符号（如全角连字符 `－`），重打一遍即可。
-
-**Q：保存 AI 设置后，API Key 会被页面上那串圆点覆盖吗？**
-不会。输入框既**不回填真实 Key，也不回填掩码**，所以不存在「只改了模型名却把掩码存成 Key」这回事；留空保存 = 保持原值，要更换就直接粘贴新 Key，要删掉就勾选「清除已保存的 API Key」。历史上被掩码污染过的配置，程序启动后会自动清除，重新粘贴一次 Key 即可。
-
-**Q：数据存在哪？会丢吗？**
-全部在 `data/` 目录。只要这个目录在，账就不会丢。所以**务必定期备份它**。
+与源仓库保持一致。本 fork 的改动同样开放，欢迎 Issue/PR。

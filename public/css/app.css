@@ -1165,3 +1165,9 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 }
 
 /* 上一条 :last-child 修正（右列末尾还有提示条） */
+
+/* v1.4.1 补强：超长分类名不挤爆交易行；贴近视口右缘的下拉改右对齐 */
+@media (max-width: 820px) {
+  .txn-title > span:not(.note) { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+}
+.hl-select-menu.right { left: auto; right: 0; }
