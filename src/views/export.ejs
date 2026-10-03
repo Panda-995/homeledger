@@ -55,11 +55,12 @@
 <div class="card">
   <div class="card-head"><h2>♻️ 从备份恢复</h2><span class="chip warn">高风险操作</span></div>
   <div class="notice warn mb12">
-    <b>恢复会覆盖当前全部数据。</b>系统会先把当前数据另存为一份安全备份，然后把上传的数据库放到数据目录并生成一份操作说明，
-    你需要按说明手动替换文件并重启容器。恢复前请务必先下载一份当前数据。
+    <b>恢复会覆盖当前全部数据。</b>系统会自动安全备份当前数据，然后立即切换到你上传的数据库——无需手动替换文件或重启容器。恢复前请务必先下载一份当前数据。
   </div>
-  <div class="row wrap">
-    <input type="file" id="restore-file" accept=".db,application/octet-stream" style="max-width:340px">
+  <div class="row wrap" style="gap:10px;align-items:center">
+    <button class="btn" type="button" id="restore-pick"><svg class="icon sm"><use href="#i-upload"></use></svg>选择备份文件</button>
+    <span class="small muted" id="restore-file-name">未选择任何文件</span>
+    <input type="file" id="restore-file" accept=".db,application/octet-stream" class="hidden">
   </div>
 </div>
 <% } %>

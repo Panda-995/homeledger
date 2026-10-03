@@ -760,15 +760,20 @@
     // 恢复备份
     const restoreInput = $('#restore-file');
     if (restoreInput) {
+      const pickBtn = $('#restore-pick');
+      const nameEl = $('#restore-file-name');
+      if (pickBtn) pickBtn.addEventListener('click', () => restoreInput.click());
       restoreInput.addEventListener('change', async () => {
         const f = restoreInput.files[0];
+        if (nameEl) nameEl.textContent = f ? f.name : '未选择任何文件';
         if (!f) return;
-        const okGo = await hlConfirm('确定要用该备份覆盖当前数据吗？\n当前数据会自动先备份一份，但仍建议你手动下载一份当前数据。', { danger: true, okText: '覆盖恢复', title: '恢复备份' });
+        const okGo = await hlConfirm('确定要用该备份覆盖当前数据吗？\n当前数据会自动先备份一份，恢复完成后需重新登录。', { danger: true, okText: '覆盖恢复', title: '恢复备份' });
         if (!okGo) { restoreInput.value = ''; return; }
         const dataUrl = await fileToDataUrl(f);
         const res = await postJson('/backup/restore', { dataUrl });
         toast(res.ok ? (res.message || '恢复完成') : '失败：' + (res.error || '未知错误'), res.ok ? 'success' : 'error');
         restoreInput.value = '';
+        if (nameEl) nameEl.textContent = '未选择任何文件';
         // 恢复替换了整个数据库（含 sessions 表），需要重新登录
         setTimeout(() => { window.location.href = '/login'; }, 1800);
       });
@@ -889,7 +894,7 @@
 
   function initDatePickers() {
     if (isTouch()) return;
-    $$('input[type="date"]').forEach(initDatePicker);
+    $('input[type="date"], input[type="month"]').forEach(initDatePicker);
   }
 
   function initDatePicker(input) {
@@ -930,6 +935,16 @@
       menu.setAttribute('role', 'dialog');
       // 面板内点击：选日期 / 翻月 / 今天 / 清除（menu 懒创建，监听必须在这里挂）
       menu.addEventListener('click', (e) => {
+        const mon = e.target.closest('[data-mon]');
+        if (mon) return pick(mon.dataset.mon);
+        const yr = e.target.closest('[data-yr]');
+        if (yr) { vy += Number(yr.dataset.yr); return renderPanel(); }
+        const thisMon = e.target.closest('[data-thismonth]');
+        if (thisMon) {
+          const d = today(); vy = d.getFullYear(); vm = d.getMonth() + 1;
+          renderPanel();
+          return pick(vy + '-' + pad2(vm));
+        }
         const day = e.target.closest('[data-day]');
         if (day) return pick(day.dataset.day);
         const nav = e.target.closest('[data-nav]');
@@ -957,15 +972,41 @@
     }
 
     function renderPanel() {
+      const isMonth = input.type === 'month';
       const sel = input.value;
       const tStr = fmt(today());
-      const offset = (new Date(vy, vm - 1, 1).getDay() + 6) % 7; // 周一为一周开始
+      if (isMonth) {
+        // 月选择模式：年份导航 + 12 月格子
+        const nowD = new Date();
+        const curYM = nowD.getFullYear() + '-' + pad2(nowD.getMonth() + 1);
+        let cells = '';
+        for (let m = 1; m <= 12; m++) {
+          const ms = vy + '-' + pad2(m);
+          const cls = 'hl-date-cell hl-date-mon' + (ms === sel ? ' selected' : '') + (ms === curYM ? ' today' : '');
+          cells += '<button type="button" class="' + cls + '" data-mon="' + ms + '">' + m + ' 月</button>';
+        }
+        menu.innerHTML =
+          '<div class="hl-date-head">' +
+            '<button type="button" class="hl-date-nav" data-yr="-1" aria-label="上一年"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></button>' +
+            '<span class="hl-date-title">' + vy + ' 年</span>' +
+            '<button type="button" class="hl-date-nav" data-yr="1" aria-label="下一年"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></button>' +
+          '</div>' +
+          '<div class="hl-date-grid hl-date-mon-grid">' + cells + '</div>' +
+          '<div class="hl-date-foot">' +
+            '<button type="button" class="hl-date-act" data-clear>清除</button>' +
+            '<span class="spacer"></span>' +
+            '<button type="button" class="hl-date-act" data-thismonth>本月</button>' +
+          '</div>';
+        return;
+      }
+      const tStr2 = tStr;
+      const offset = (new Date(vy, vm - 1, 1).getDay() + 6) % 7;
       const days = new Date(vy, vm, 0).getDate();
       let cells = '';
       for (let i = 0; i < offset; i++) cells += '<span class="hl-date-cell blank"></span>';
       for (let d = 1; d <= days; d++) {
         const ds = vy + '-' + pad2(vm) + '-' + pad2(d);
-        const cls = 'hl-date-cell' + (ds === sel ? ' selected' : '') + (ds === tStr ? ' today' : '');
+        const cls = 'hl-date-cell' + (ds === sel ? ' selected' : '') + (ds === tStr2 ? ' today' : '');
         cells += '<button type="button" class="' + cls + '" data-day="' + ds + '">' + d + '</button>';
       }
       menu.innerHTML =
