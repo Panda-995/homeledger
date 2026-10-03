@@ -5,6 +5,9 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+
 # 并行 tag 推送不互相竞争
 concurrency:
   group: docker-publish-${{ github.ref }}
