@@ -2,12 +2,18 @@
 /**
  * 「关于」页静态数据与反馈配置
  *
- * GITHUB_REPO：功能需求提交跳转的仓库地址。
- *   - 当前已配置；更换仓库时改这里即可（环境变量 HOMELEDGER_GITHUB_REPO 优先）。
+ * GITHUB_REPO：功能需求提交跳转的仓库地址（本 fork）。
+ *   - 环境变量 HOMELEDGER_GITHUB_REPO 优先于这里的值。
  *   - 留空时，关于页的反馈按钮会置灰并提示「仓库暂未配置」，
  *     页面其余内容不受影响。
+ * UPSTREAM：源仓库地址，关于页会注明项目来源与原作者。
  */
-const GITHUB_REPO = 'https://github.com/sucraft-hub/homeledger';
+const GITHUB_REPO = 'https://github.com/Panda-995/homeledger';
+const UPSTREAM = {
+  name: '家账簿 HomeLedger（原版）',
+  url: 'https://github.com/sucraft-hub/homeledger',
+  author: '蘇先生',
+};
 
 const APP = {
   name: '家账簿 HomeLedger',
@@ -16,7 +22,8 @@ const APP = {
     '纯后端 SSR 架构，数据 100% 存放在你自己的 NAS / 服务器上。' +
     '支持文字与截图 AI 自动记账、订阅扣费管理、预算与储蓄目标、开放 API 对接，' +
     '零原生依赖，单进程即可运行。',
-  author: '蘇先生',
+  author: 'Panda-995',
+  maintainerNote: 'Fork 版本由 Panda-995 维护与更新（不自动同步上游）。',
   aiNote: '本项目的部分代码与文档由 AI 辅助生成。',
 };
 
@@ -36,9 +43,19 @@ const FEATURES = [
  */
 const CHANGELOG = [
   {
-    version: '1.6.0',
+    version: '1.6.1',
     date: '2026-10-04',
     tag: '当前版本',
+    items: [
+      '关于页与项目署名切换为 fork 身份：提需求 / 报 Bug 指向 Panda-995/homeledger',
+      '运行环境注明维护者为 Panda-995，并保留源仓库（sucraft-hub/homeledger，作者蘇先生）链接与 AI 辅助声明',
+      '飞牛 fpk 打包元数据同步更新',
+    ],
+  },
+  {
+    version: '1.6.0',
+    date: '2026-10-04',
+    tag: '',
     items: [
       '修复：借入/收还款/报销/退款/利息在明细列表显示为红色负号（与统计口径相反），符号与配色统一按余额方向',
       '修复：投资买入/卖出不选对手账户时资金凭空蒸发或记账无效，现强制双账户校验',
@@ -170,4 +187,4 @@ function issuesUrl() {
   return repo + '/issues';
 }
 
-module.exports = { APP, FEATURES, CHANGELOG, TECH, GITHUB_REPO, repoUrl, issuesUrl };
+module.exports = { APP, FEATURES, CHANGELOG, TECH, GITHUB_REPO, UPSTREAM, repoUrl, issuesUrl };

@@ -55,6 +55,7 @@ router.get('/about', auth.requireLogin, (req, res) => {
     title: '关于', activeNav: 'about',
     version: VERSION,
     app: about.APP,
+    upstream: about.UPSTREAM,
     features: about.FEATURES,
     changelog: about.CHANGELOG,
     tech: about.TECH,

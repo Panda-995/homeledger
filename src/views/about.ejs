@@ -35,14 +35,14 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>💡 提功能需求</h2></div>
+  <div class="card-head"><h2>💡 提功能需求 / 报 Bug</h2></div>
   <div class="about-feedback">
     <div class="about-fb-text">
-      <div>在使用中遇到不顺手的地方，或者想到新功能，欢迎到 GitHub 提 Issue：</div>
+      <div>在使用中遇到不顺手的地方、发现 Bug，或者想到新功能，欢迎到本仓库（Panda-995/homeledger）提 Issue：</div>
       <ul class="small muted" style="margin:6px 0 0 18px">
         <li>标题一句话说清需求，例如「支持周期转账的备注模板」</li>
         <li>正文写清楚使用场景和期望效果，越具体越容易被排期</li>
-        <li>Bug 反馈也走同一入口，请附上操作步骤（无需截图敏感数据）</li>
+        <li>Bug 反馈请附上操作步骤（无需截图敏感数据）；源仓库的原始问题请前往 <a href="<%= upstream.url %>" target="_blank" rel="noopener">原项目</a> 反馈</li>
       </ul>
     </div>
     <% if (issuesUrl) { %>
@@ -103,7 +103,8 @@
       </table>
     </details>
     <div class="small muted" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-      由 <b><%= app.author %></b> 维护 · <%= app.aiNote %>
+      由 <b><%= app.author %></b> 维护 · <%= app.maintainerNote %><br>
+      原项目：<a href="<%= upstream.url %>" target="_blank" rel="noopener"><%= upstream.name %></a>（作者 <%= upstream.author %>） · <%= app.aiNote %>
     </div>
   </div>
 </div>
