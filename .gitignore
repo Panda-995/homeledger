@@ -12,3 +12,4 @@ dist/
 ui-*.png
 _cc.txt
 .screenshots/
+__pycache__/

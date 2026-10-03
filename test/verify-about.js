@@ -42,7 +42,7 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   /* --- issuesUrl 单元（两种状态）--- */
   const saved = process.env.HOMELEDGER_GITHUB_REPO;
   delete process.env.HOMELEDGER_GITHUB_REPO;
-  check('未设环境变量时回退到内置 GITHUB_REPO', issuesUrl() === 'https://github.com/sucraft-hub/homeledger/issues', String(issuesUrl()));
+  check('未设环境变量时回退到内置 GITHUB_REPO', issuesUrl() === 'https://github.com/Panda-995/homeledger/issues', String(issuesUrl()));
   process.env.HOMELEDGER_GITHUB_REPO = 'https://github.com/su-xiansheng/homeledger/';
   check('配置仓库后返回规范 Issues 地址', issuesUrl() === 'https://github.com/su-xiansheng/homeledger/issues', String(issuesUrl()));
   process.env.HOMELEDGER_GITHUB_REPO = 'javascript:alert(1)';
@@ -71,10 +71,11 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   check('统计卡渲染（记录笔数/陪伴天数）', r.text.includes('记录笔数') && r.text.includes('陪伴天数'));
   check('隐私声明渲染', r.text.includes('数据与隐私') && r.text.includes('不上传任何第三方服务器'));
   check('技术栈渲染', r.text.includes('技术栈') && r.text.includes('Node.js'));
-  check('作者与 AI 辅助声明渲染', r.text.includes('蘇先生') && r.text.includes('AI 辅助'));
+  check('作者与 AI 辅助声明渲染', r.text.includes('Panda-995') && r.text.includes('AI 辅助') && r.text.includes('sucraft-hub/homeledger'));
+  check('维护者声明为 fork 身份', r.text.includes('由 Panda-995 维护') && r.text.includes('原项目'));
 
   /* --- 反馈区：仓库已配置 → 渲染 GitHub Issues 外链 --- */
-  check('已配置仓库时渲染 GitHub Issues 外链', r.text.includes('href="https://github.com/sucraft-hub/homeledger/issues"'));
+  check('已配置仓库时渲染 GitHub Issues 外链', r.text.includes('href="https://github.com/Panda-995/homeledger/issues"'));
   check('外链新窗口打开且安全属性', /target="_blank"[^>]*rel="noopener"/.test(r.text));
   check('未配置降级提示不再出现', !r.text.includes('仓库地址暂未配置'));
 
