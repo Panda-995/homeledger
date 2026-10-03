@@ -22,7 +22,7 @@
 ```yaml
 services:
   homeledger:
-    image: ghcr.io/sucraft-hub/homeledger:latest
+    image: ghcr.milu.moe/panda-995/homeledger:latest   # 本仓库镜像的中转加速源；直连可用 ghcr.io/panda-995/homeledger:latest
     container_name: homeledger
     restart: unless-stopped
     environment:
@@ -46,7 +46,7 @@ docker compose up -d
 
 | 配置项 | 说明 |
 | --- | --- |
-| `image` | 官方预构建镜像（GitHub Actions 自动发布），无需本地构建 |
+| `image` | 预构建镜像（本仓库 GitHub Actions 自动发布，`ghcr.milu.moe` 为加速中转，直连可换 `ghcr.io/panda-995/homeledger:latest`），无需本地构建 |
 | `SESSION_SECRET` | 改成随机长字符串（`openssl rand -hex 32`），否则重启后登录态失效 |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | 首次启动自动创建的管理员（仅当库中还没有用户时生效） |
 | `ports` | 左侧为对外访问端口，冲突可改；右侧保持 5111 |
@@ -58,13 +58,13 @@ docker compose up -d
 ```bash
 docker run -d --name homeledger --restart unless-stopped -p 5111:5111 \
   -e TZ=Asia/Shanghai -e SESSION_SECRET="请改成随机长字符串" \
-  -v "$PWD/data:/data" ghcr.io/sucraft-hub/homeledger:latest
+  -v "$PWD/data:/data" ghcr.milu.moe/panda-995/homeledger:latest
 ```
 
 ### 方式 C：从源码构建（不想用预构建镜像）
 
 ```bash
-git clone https://github.com/sucraft-hub/homeledger.git && cd homeledger
+git clone https://github.com/Panda-995/homeledger.git && cd homeledger
 docker compose up -d          # 仓库自带 docker-compose.yml（build: . 本地构建）
 ```
 

@@ -1,8 +1,9 @@
 services:
   homeledger:
-    build: .
-    # 没有构建环境时，可改为使用已推送的镜像：
-    # image: your-registry/homeledger:1.0.0
+    # 预构建镜像（GitHub Actions 自动发布）；ghcr.milu.moe 为加速中转，直连可换 ghcr.io/panda-995/homeledger:latest
+    image: ghcr.milu.moe/panda-995/homeledger:latest
+    # 想本地构建时，注释掉上面 image 行并取消下一行注释：
+    # build: .
     container_name: homeledger
     restart: unless-stopped
     ports:
