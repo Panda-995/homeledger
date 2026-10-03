@@ -43,6 +43,16 @@ const FEATURES = [
  */
 const CHANGELOG = [
   {
+    version: '1.7.2',
+    date: '2026-10-04',
+    tag: '当前版本',
+    items: [
+      '修复头像图片 absolute + inset 硬约束（任何尺寸的头像图都被裁剪在容器内不再撑满页面）',
+      '月份选择器：报表分析日期弹层改为项目风格年份+月份弹层',
+      '文件上传按钮改项目风格（隐藏原生 file input）',
+    ],
+  },
+  {
     version: '1.7.1',
     date: '2026-10-04',
     tag: '',
