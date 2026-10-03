@@ -208,7 +208,11 @@ router.post('/bulk', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
     }
     case 'reimburse': {
       try {
-        const r = txn.markReimbursed(ids, ledgerId, req.session.userId, req.body.account_id ? Number(req.body.account_id) : null);
+        // 未选入账账户时回落到账本第一个可用账户，避免报销收入悬空（与开放 API 行为一致）
+        const reimburseAcc = req.body.account_id
+          ? Number(req.body.account_id)
+          : Number(get('SELECT id FROM accounts WHERE ledger_id = ? AND is_archived = 0 ORDER BY sort_order, id LIMIT 1', ledgerId)?.id) || null;
+        const r = txn.markReimbursed(ids, ledgerId, req.session.userId, reimburseAcc);
         res.flash('success', `已标记 ${r.count} 笔为已报销，生成入账 ${(r.total / 100).toFixed(2)}`);
       } catch (e) {
         res.flash('error', e.message);

@@ -209,16 +209,19 @@ const ROLE_LABEL = { viewer: '只读', member: '成员', admin: '管理员', own
 const canWrite = (role) => (ROLE_RANK[role] || 0) >= ROLE_RANK.member;
 const canManage = (role) => (ROLE_RANK[role] || 0) >= ROLE_RANK.admin;
 
-/** 校验对当前账本的写权限 */
+/** 校验对当前账本的写权限（归档账本只读） */
 function requireLedgerWrite(req, res, next) {
   const m = res.locals.ledger;
   if (!m) return res.status(400).render('error', { title: '没有账本', message: '请先创建一个账本' });
+  if (m.is_archived) return res.status(403).render('error', { title: '账本已归档', message: '该账本已归档（只读），请先在「账本管理」中恢复后再操作' });
   if (!canWrite(m.role)) return res.status(403).render('error', { title: '只读权限', message: '你在该账本中只有只读权限，无法进行此操作' });
   next();
 }
 function requireLedgerManage(req, res, next) {
   const m = res.locals.ledger;
-  if (!m || !canManage(m.role)) return res.status(403).render('error', { title: '权限不足', message: '需要账本管理员及以上权限' });
+  if (!m) return res.status(400).render('error', { title: '没有账本', message: '请先创建一个账本' });
+  if (m.is_archived) return res.status(403).render('error', { title: '账本已归档', message: '该账本已归档（只读），请先在「账本管理」中恢复后再操作' });
+  if (!canManage(m.role)) return res.status(403).render('error', { title: '权限不足', message: '需要账本管理员及以上权限' });
   next();
 }
 

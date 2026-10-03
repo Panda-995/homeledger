@@ -1,0 +1,15 @@
+<h1 style="font-size:18px;margin-bottom:6px">加入账本确认</h1>
+
+<% if (error) { %>
+  <div class="flash error"><span><%= error %></span></div>
+<% } else { %>
+  <div class="notice info mb16">
+    你被邀请以 <b><%= roleLabel %></b> 身份加入账本「<b><%= ledgerName %></b>」。<br>
+    <span class="tiny muted">邀请由 <%= creator %> 创建<%= expiresAt ? ' · 有效期至 ' + expiresAt : '' %>。</span>
+  </div>
+  <form method="post" action="/join/<%= encodeURIComponent(code) %>">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+    <button class="btn btn-primary btn-block btn-lg" type="submit">确认加入</button>
+  </form>
+<% } %>
+<div class="auth-foot">不想加入？直接关闭本页即可，邀请不会被使用。</div>

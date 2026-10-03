@@ -116,7 +116,7 @@ function budgetUsed(b, month) {
   const params = [b.ledger_id, start, end];
   let sql = `SELECT COALESCE(SUM(amount_base_cents),0) AS s FROM transactions
              WHERE ledger_id = ? AND deleted_at IS NULL AND txn_date >= ? AND txn_date <= ?`;
-  const typeCond = b.trigger_type === 'income' ? "AND type IN ('income')" : "AND type IN ('expense','lend','repay_pay','fee','invest_buy')";
+  const typeCond = b.trigger_type === 'income' ? "AND type IN ('income')" : "AND type IN ('expense','fee')";
   sql += ` ${typeCond}`;
   if (b.scope === 'category' && b.category_id) {
     sql += ' AND (category_id = ? OR category_id IN (SELECT id FROM categories WHERE parent_id = ?))';
@@ -145,7 +145,12 @@ function budgetPeriodRange(b, ref = new Date()) {
       return { start: f(s), end: f(e), label: `${monday} 当周`, key: monday };
     }
     case 'custom':
-      return { start: b.start_date || `${month}-01`, end: b.end_date || `${month}-31`, label: '自定义周期', key: `${b.start_date}_${b.end_date}` };
+      const cs = b.start_date || `${month}-01`;
+      const ce = b.end_date || `${month}-31`;
+      // 起止填反时自动交换，否则统计区间恒空
+      return ce < cs
+        ? { start: ce, end: cs, label: '自定义周期', key: `${ce}_${cs}` }
+        : { start: cs, end: ce, label: '自定义周期', key: `${cs}_${ce}` };
     case 'monthly':
     default:
       return { start: `${month}-01`, end: `${month}-31`, label: `${month}`, key: month };
@@ -154,7 +159,7 @@ function budgetPeriodRange(b, ref = new Date()) {
 
 function budgetUsedInRange(b, start, end) {
   const params = [b.ledger_id, start, end];
-  const typeCond = b.trigger_type === 'income' ? "AND type IN ('income')" : "AND type IN ('expense','lend','repay_pay','fee','invest_buy')";
+  const typeCond = b.trigger_type === 'income' ? "AND type IN ('income')" : "AND type IN ('expense','fee')";
   let sql = `SELECT COALESCE(SUM(amount_base_cents),0) AS s FROM transactions
              WHERE ledger_id = ? AND deleted_at IS NULL AND txn_date BETWEEN ? AND ? ${typeCond}`;
   if (b.scope === 'category' && b.category_id) {

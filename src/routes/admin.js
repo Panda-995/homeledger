@@ -609,7 +609,7 @@ router.get('/export/csv', auth.requireLogin, (req, res) => {
   for (;;) {
     const r = txn.listTransactions(ledgerId, { ...f, page, pageSize: 200 });
     rows.push(...r.rows);
-    if (page >= r.pages || page > 100) break;
+    if (page >= r.pages || page > 2500) break; // 安全上限 50 万行，正常账本远达不到
     page++;
   }
   const csv = importer.toCsv(importer.EXPORT_HEADER, importer.exportRows(ledgerId, rows));

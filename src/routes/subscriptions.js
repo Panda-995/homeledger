@@ -129,6 +129,8 @@ router.post('/subscriptions/:id', auth.requireLogin, auth.requireLedgerWrite, (r
   if (!old) { res.flash('error', '订阅不存在'); return res.redirect('/subscriptions'); }
   const d = readForm(req.body, req.session.userId);
   if (!d.name || !d.amount_cents) { res.flash('error', '名称与金额不能为空'); return res.redirect(`/subscriptions/${id}/edit`); }
+  // 已取消订阅不随表单复活：编辑页状态下拉没有「已取消」选项，保存时沿用原状态
+  if (old.status === 'canceled') d.status = 'canceled';
   run(
     `UPDATE subscriptions SET name=?, icon=?, plan=?, vendor_url=?, amount_cents=?, currency=?, cycle=?, cycle_n=?,
       anchor_month=?, anchor_day=?, account_id=?, category_id=?, auto_renew=?, trial_ends_on=?, next_charge_at=?,
@@ -150,7 +152,7 @@ router.post('/subscriptions/:id/charge', auth.requireLogin, auth.requireLedgerWr
   if (!sub) { res.flash('error', '订阅不存在'); return res.redirect('/subscriptions'); }
   const txnId = subs.charge(sub, req.session.userId, { date: DAY_RE.test(String(req.body.date || '')) ? req.body.date : todayStr() });
   if (!txnId) { res.flash('error', '订阅金额为 0，无法记账'); return res.redirect('/subscriptions'); }
-  require('../db').recalcBalances(ledgerId);
+  // subs.charge 非 silent 内部已重算余额，这里不再重复
   auth.audit(req, 'subscription.charge', { entity: 'subscription', entityId: sub.id, ledgerId, detail: String(sub.amount_cents) });
   res.flash('success', `已记一笔订阅扣费 ${u.money(sub.amount_cents)}，下次扣费日已顺延`);
   res.redirect('/subscriptions');

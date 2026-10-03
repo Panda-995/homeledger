@@ -159,23 +159,50 @@ router.post('/ledgers/switch', auth.requireLogin, (req, res) => {
   res.redirect(back);
 });
 
-/** 通过邀请码加入账本 */
-router.get('/join/:code', auth.requireLogin, (req, res) => {
+/** 邀请码校验（GET 展示确认页 / POST 执行加入共用）；返回 { invite, ledger } 或已直接响应 */
+function resolveInvite(req, res) {
   const code = String(req.params.code || '').trim();
   const invite = get('SELECT * FROM ledger_invites WHERE code = ?', code);
-  if (!invite) return res.status(404).render('error', { title: '邀请无效', message: '邀请链接不存在或已被删除。' });
+  if (!invite) { res.status(404).render('error', { title: '邀请无效', message: '邀请链接不存在或已被删除。' }); return null; }
   if (invite.expires_at && invite.expires_at < require('../db').todayStr()) {
-    return res.status(410).render('error', { title: '邀请已过期', message: '请让账本管理员重新生成邀请链接。' });
+    res.status(410).render('error', { title: '邀请已过期', message: '请让账本管理员重新生成邀请链接。' }); return null;
   }
   // 已使用的邀请一律不能再入（含本人）：否则被降级/移出的成员可拿旧链接恢复原角色
   if (Number(invite.used_by)) {
-    return res.status(410).render('error', { title: '邀请已使用', message: '该邀请链接已被使用，请让账本管理员重新生成。' });
+    res.status(410).render('error', { title: '邀请已使用', message: '该邀请链接已被使用，请让账本管理员重新生成。' }); return null;
   }
   const ledger = get('SELECT * FROM ledgers WHERE id = ?', invite.ledger_id);
-  if (!ledger) return res.status(404).render('error', { title: '账本不存在', message: '该账本已被删除。' });
-  // 已是成员则不重复授予角色（避免 viewer 重新走链接被提升）
-  const existing = auth.membership(req.session.userId, invite.ledger_id);
-  if (existing) {
+  if (!ledger) { res.status(404).render('error', { title: '账本不存在', message: '该账本已被删除。' }); return null; }
+  return { invite, ledger };
+}
+
+/** 邀请确认页：GET 不再直接入账（链接预览机器人/误点不会烧掉单用邀请码） */
+router.get('/join/:code', auth.requireLogin, (req, res) => {
+  const found = resolveInvite(req, res);
+  if (!found) return;
+  const { invite, ledger } = found;
+  if (auth.membership(req.session.userId, invite.ledger_id)) {
+    req.session.ledgerId = Number(invite.ledger_id);
+    req.session.flash = { type: 'info', message: `你已是账本「${ledger.name}」的成员` };
+    return res.redirect('/');
+  }
+  res.render('join', {
+    title: '加入账本', layout: 'layout-blank',
+    code: invite.code, ledgerName: ledger.name,
+    roleLabel: auth.ROLE_LABEL[invite.role] || '成员',
+    creator: (get('SELECT display_name FROM users WHERE id = ?', invite.created_by) || {}).display_name || '—',
+    expiresAt: invite.expires_at || '',
+    error: null,
+  });
+});
+
+/** 确认加入（POST） */
+router.post('/join/:code', auth.requireLogin, (req, res) => {
+  const found = resolveInvite(req, res);
+  if (!found) return;
+  const { invite, ledger } = found;
+  const code = invite.code;
+  if (auth.membership(req.session.userId, invite.ledger_id)) {
     req.session.ledgerId = Number(invite.ledger_id);
     req.session.flash = { type: 'info', message: `你已是账本「${ledger.name}」的成员` };
     return res.redirect('/');
