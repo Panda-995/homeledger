@@ -34,29 +34,65 @@ function requireToken(req, res, next) {
   if (!plain) return res.status(401).json({ ok: false, error: '缺少 Bearer 令牌（Authorization: Bearer <令牌>）' });
 
   const row = get(
-    `SELECT t.*, u.username FROM api_tokens t JOIN users u ON u.id = t.user_id
+    `SELECT t.*, u.username, u.status AS user_status FROM api_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ? AND t.revoked_at IS NULL`,
     hashToken(plain)
   );
   if (!row) return res.status(401).json({ ok: false, error: '令牌无效或已吊销' });
+  if (row.user_status !== 'active') return res.status(401).json({ ok: false, error: '令牌所属用户已被禁用' });
 
   const ledgerId = Number(row.ledger_id) ||
     Number(get('SELECT ledger_id FROM ledger_members WHERE user_id = ? ORDER BY ledger_id LIMIT 1', row.user_id)?.ledger_id) ||
     0;
   if (!ledgerId) return res.status(403).json({ ok: false, error: '该令牌未绑定账本，且用户名下没有可用账本' });
 
-  req.openAuth = { userId: Number(row.user_id), username: row.username, ledgerId, tokenId: Number(row.id), tokenName: row.name };
+  // 令牌效力跟随成员关系：被移出账本后令牌立即失效（否则仍可读该账本流水与截图）
+  const member = get('SELECT role FROM ledger_members WHERE user_id = ? AND ledger_id = ?', row.user_id, ledgerId);
+  if (!member) return res.status(403).json({ ok: false, error: '令牌所属用户已不是该账本成员，令牌已失效' });
+
+  req.openAuth = { userId: Number(row.user_id), username: row.username, ledgerId, tokenId: Number(row.id), tokenName: row.name, role: member.role };
   run('UPDATE api_tokens SET last_used_at = ? WHERE id = ?', nowStr(), row.id);
   next();
 }
 
 router.use(requireToken);
 
+/* ------------------------------ 每令牌频控 ------------------------------ */
+/* Hermes / OpenClaw 是会自主循环调工具的 agent，失控时会无限刷接口；
+   /ai/bill 还会消耗已配置的视觉模型额度，单独收紧。 */
+const RATE_RULES = [
+  { match: (p) => p === '/ai/bill', max: 10, windowMs: 60 * 1000 },
+  { match: () => true, max: 60, windowMs: 60 * 1000 },
+];
+const rateBuckets = new Map(); // `${tokenId}:${ruleIndex}` -> [timestamps]
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, arr] of rateBuckets) {
+    const alive = arr.filter((t) => now - t < 5 * 60 * 1000);
+    if (alive.length) rateBuckets.set(k, alive);
+    else rateBuckets.delete(k);
+  }
+}, 5 * 60 * 1000).unref?.();
+
+router.use((req, res, next) => {
+  const now = Date.now();
+  const ruleIdx = RATE_RULES.findIndex((r) => r.match(req.path));
+  const rule = RATE_RULES[ruleIdx];
+  const key = `${req.openAuth.tokenId}:${ruleIdx}`;
+  const arr = (rateBuckets.get(key) || []).filter((t) => now - t < rule.windowMs);
+  if (arr.length >= rule.max) {
+    const retry = Math.ceil((rule.windowMs - (now - arr[0])) / 1000);
+    return res.status(429).json({ ok: false, error: `请求过于频繁（${rule.max} 次/分钟），请 ${retry} 秒后重试` });
+  }
+  arr.push(now);
+  rateBuckets.set(key, arr);
+  next();
+});
+
 /** 写操作需令牌所属用户在该账本有写权限（防止只读成员用令牌绕过网页端角色限制） */
 router.use((req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  const m = get('SELECT role FROM ledger_members WHERE user_id = ? AND ledger_id = ?', req.openAuth.userId, req.openAuth.ledgerId);
-  if (!m || !auth.canWrite(m.role)) {
+  if (!auth.canWrite(req.openAuth.role)) {
     return res.status(403).json({ ok: false, error: '该令牌所属用户在此账本中只有只读权限，无法执行写操作' });
   }
   next();
@@ -306,6 +342,11 @@ router.get('/attachments/:id', (req, res) => {
   res.type(att.safeMime(found.row.mime));
   res.setHeader('Cache-Control', 'private, max-age=86400');
   res.sendFile(found.abs);
+});
+
+/** API 兜底：未匹配的路径/方法一律 JSON 404，避免落到网页错误页（会因缺会话 locals 渲染 500） */
+router.use((req, res) => {
+  res.status(404).json({ ok: false, error: `接口不存在：${req.method} ${req.path}` });
 });
 
 module.exports = router;

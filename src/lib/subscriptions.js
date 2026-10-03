@@ -204,7 +204,7 @@ function chargesOf(ledgerId, subId, limit = 12) {
 
 /**
  * 扣一笔订阅费用，生成交易
- * @returns {number|null} 交易 id
+ * @returns {number|null} 交易 id；无法记账（金额为 0 / 未指定扣费账户）时返回 null
  */
 function charge(sub, userId, { date = todayStr(), silent = false } = {}) {
   const amount = Math.abs(Number(sub.amount_cents) || 0);
@@ -216,7 +216,7 @@ function charge(sub, userId, { date = todayStr(), silent = false } = {}) {
       user_id, txn_date, note, merchant, status, source, subscription_id, created_at, updated_at)
      VALUES (?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?,?,?)`,
     Number(sub.ledger_id), 'expense', amount, sub.currency || 'CNY', 1, amount,
-    sub.account_id || null, sub.category_id || null,
+    sub.account_id ? Number(sub.account_id) : null, sub.category_id || null,
     Number(userId) || Number(sub.created_by_user_id) || 1,
     date, `订阅扣费 · ${label}`, sub.name, 'cleared', 'subscription',
     Number(sub.id), nowStr(), nowStr()
@@ -246,6 +246,7 @@ function runDue(today = todayStr()) {
   );
   const stat = { charged: 0, renewed: 0, notified: 0 };
   for (const sub of due) {
+   try {
     if (!sub.auto_renew) {
       // 未开启自动续费：只提醒，等用户自己决定
       const key = `sub-hold:${sub.id}:${sub.next_charge_at}`;
@@ -266,10 +267,16 @@ function runDue(today = todayStr()) {
     let cursor = sub.next_charge_at;
     let guard = 0;
     let charged = false;
+    let chargeBlocked = false;
     while (cursor <= today && guard < MAX_CATCHUP) {
-      charge({ ...sub, next_charge_at: cursor }, sub.created_by_user_id, { date: cursor, silent: true });
-      stat.charged++;
-      charged = true;
+      const txnId = charge({ ...sub, next_charge_at: cursor }, sub.created_by_user_id, { date: cursor, silent: true });
+      if (txnId) {
+        stat.charged++;
+        charged = true;
+      } else {
+        // 记不了账（金额为 0 或未指定扣费账户）：推进周期避免死循环，并提醒用户去补配置
+        chargeBlocked = true;
+      }
       cursor = advance(cursor, sub);
       guard++;
     }
@@ -283,10 +290,30 @@ function runDue(today = todayStr()) {
       status = 'active';
       stat.renewed++;
     }
-    if (charged) {
+    if (charged || chargeBlocked || status !== sub.status) {
       run('UPDATE subscriptions SET next_charge_at = ?, status = ? WHERE id = ?', cursor, status, sub.id);
+    }
+    if (charged) {
       try { require('../db').recalcBalances(Number(sub.ledger_id)); } catch { /* ignore */ }
     }
+    if (chargeBlocked) {
+      const key = `sub-blocked:${sub.id}:${cursor}`;
+      if (!alreadyNotified(key)) {
+        for (const uid of ledgerWriterIds(sub.ledger_id)) {
+          notify(uid, {
+            kind: 'warn', ledgerId: sub.ledger_id,
+            title: `订阅未能自动记账：${sub.name}`,
+            body: `订阅金额为 0，${sub.next_charge_at} 起的扣费已跳过记账，请补全金额 |${key}`,
+            link: `/subscriptions/${sub.id}/edit`,
+          });
+          stat.notified++;
+        }
+      }
+    }
+   } catch (e) {
+     // 单个订阅异常不中断整批扣费
+     console.error(`[subscriptions] 扣费失败（${sub.name} #${sub.id}）:`, e.message);
+   }
   }
   return stat;
 }

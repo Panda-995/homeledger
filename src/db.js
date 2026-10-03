@@ -503,7 +503,9 @@ const INCOME_SEED = [
 const DEFAULT_SETTINGS = {
   'site.name': '家账簿',
   'site.currency': 'CNY',
-  'site.allow_register': (process.env.ALLOW_REGISTER || 'true') === 'true' ? 'true' : 'false',
+  // 安全默认：注册默认关闭（NAS 局域网内任何能访问端口的人都可以自助注册并消耗
+  // 管理员配置的 AI 额度）。需要开放时设 ALLOW_REGISTER=true 或在设置页勾选。
+  'site.allow_register': process.env.ALLOW_REGISTER === 'true' ? 'true' : 'false',
   'ai.enabled': 'false',
   'ai.base_url': 'https://open.bigmodel.cn/api/paas/v4',
   'ai.api_key': '',

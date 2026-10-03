@@ -149,7 +149,7 @@ router.post('/subscriptions/:id/charge', auth.requireLogin, auth.requireLedgerWr
   const sub = get('SELECT * FROM subscriptions WHERE id = ? AND ledger_id = ?', Number(req.params.id), ledgerId);
   if (!sub) { res.flash('error', '订阅不存在'); return res.redirect('/subscriptions'); }
   const txnId = subs.charge(sub, req.session.userId, { date: DAY_RE.test(String(req.body.date || '')) ? req.body.date : todayStr() });
-  if (!txnId) { res.flash('error', '金额为 0，无法记账'); return res.redirect('/subscriptions'); }
+  if (!txnId) { res.flash('error', '订阅金额为 0，无法记账'); return res.redirect('/subscriptions'); }
   require('../db').recalcBalances(ledgerId);
   auth.audit(req, 'subscription.charge', { entity: 'subscription', entityId: sub.id, ledgerId, detail: String(sub.amount_cents) });
   res.flash('success', `已记一笔订阅扣费 ${u.money(sub.amount_cents)}，下次扣费日已顺延`);

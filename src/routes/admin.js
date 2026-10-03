@@ -611,17 +611,10 @@ router.get('/export/json', auth.requireLogin, (req, res) => {
 /** 备份：下载 SQLite 数据库文件 */
 router.get('/backup/db', auth.requireLogin, auth.requireAdmin, (req, res, next) => {
   try {
-    // 用 SQLite 自身的一致性备份，避免边写边拷导致损坏
-    const { backup } = require('node:sqlite');
+    // 用 VACUUM INTO 产出一致、紧凑的完整快照（包含 WAL 中尚未合并的写入）。
+    // 直接 copyFileSync 活库文件在 WAL 模式下会缺最近写入，-wal 又不会随 .db 一起被下载。
     const target = path.join(DATA_DIR, `backup-${todayStr()}-${Date.now()}.db`);
-    if (typeof backup === 'function') {
-      // Node 22/24 的 backup 为异步 API，这里回退到同步复制
-    }
-    fs.copyFileSync(DB_FILE, target);
-    for (const suffix of ['-wal', '-shm']) {
-      const extra = DB_FILE + suffix;
-      if (fs.existsSync(extra)) { try { fs.copyFileSync(extra, target + suffix); } catch { /* ignore */ } }
-    }
+    require('../db').db.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
     auth.audit(req, 'backup.download');
     res.download(target, `homeledger-${todayStr()}.db`, (err) => {
       try { fs.unlinkSync(target); } catch { /* ignore */ }

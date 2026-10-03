@@ -18,11 +18,8 @@ services:
       # 首次启动自动创建管理员（仅当库中还没有任何用户时生效）
       ADMIN_USER: "${ADMIN_USER:-admin}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin888}"
-      ALLOW_REGISTER: "true"
-      # 若 NAS 上跑了 Ollama，可在此指定本机推理地址（也可登录后在网页里配置）
-      OLLAMA_BASE_URL: "http://host.docker.internal:11434/v1"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # 开放自助注册默认关闭（安全默认）；需要开放时改为 true
+      ALLOW_REGISTER: "${ALLOW_REGISTER:-false}"
     volumes:
       # 飞牛 NAS：把左侧换成你自己的共享文件夹路径，例如
       #   /vol1/1000/docker/homeledger/data
