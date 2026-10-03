@@ -71,7 +71,7 @@ router.use(requireToken);
 /* Hermes / OpenClaw 是会自主循环调工具的 agent，失控时会无限刷接口；
    /ai/bill 还会消耗已配置的视觉模型额度，单独收紧。 */
 const RATE_RULES = [
-  { match: (p) => p === '/ai/bill', max: 10, windowMs: 60 * 1000 },
+  { match: (p) => p === '/ai/bill' || p === '/ai/bill/', max: 10, windowMs: 60 * 1000 },
   { match: () => true, max: 60, windowMs: 60 * 1000 },
 ];
 const rateBuckets = new Map(); // `${tokenId}:${ruleIndex}` -> [timestamps]
@@ -119,12 +119,37 @@ function requireSiteAdmin(req, res, next) {
 
 /* ------------------------------- 通用工具 -------------------------------- */
 
-/** 中文/英文别名 → 标准 type key */
+/** 中文/英文别名 → 标准 type key（null 原型防 prototype 键绕过白名单） */
 const TYPE_ALIASES = (() => {
-  const map = { 支出: 'expense', 收入: 'income', 转账: 'transfer', 借出: 'lend', 借入: 'borrow', 收回借款: 'repay_receive', 偿还借款: 'repay_pay' };
+  const map = Object.assign(Object.create(null), {
+    支出: 'expense', 收入: 'income', 转账: 'transfer', 借出: 'lend', 借入: 'borrow', 收回借款: 'repay_receive', 偿还借款: 'repay_pay',
+  });
   for (const t of TXN_TYPES) map[t.key] = t.key;
   return map;
 })();
+
+/** 外键归属校验：账户/分类必须属于本账本（或系统分类），防止把他账本 id 挂进本账本 */
+function validAccountId(ledgerId, id) {
+  if (!id) return null;
+  const a = get('SELECT id FROM accounts WHERE id = ? AND ledger_id = ?', Number(id), ledgerId);
+  return a ? Number(a.id) : null;
+}
+function validCategoryId(ledgerId, id) {
+  if (!id) return null;
+  const c = get('SELECT id FROM categories WHERE id = ? AND (ledger_id IS NULL OR ledger_id = ?)', Number(id), ledgerId);
+  return c ? Number(c.id) : null;
+}
+
+/** 批量 ids：去重 + 数量上限（超限抛 400，由路由错误中间件统一返回 JSON） */
+function readBulkIds(body) {
+  const raw = [...new Set([].concat((body || {}).ids || []).map(Number).filter(Boolean))];
+  if (raw.length > 1000) {
+    const e = new Error('ids 一次最多 1000 个');
+    e.status = 400;
+    throw e;
+  }
+  return raw;
+}
 
 function resolveCategory(ledgerId, name, kind) {
   const s = String(name || '').trim();
@@ -399,12 +424,9 @@ router.get('/subscriptions', (req, res) => {
 
 router.get('/recurring', (req, res) => {
   const { ledgerId } = req.openAuth;
-  const rules = all('SELECT * FROM recurring_rules WHERE ledger_id = ? ORDER BY is_active DESC, next_run_at', ledgerId).map((r) => {
-    let items = [];
-    try { items = JSON.parse(r.payload); } catch { items = []; }
-    if (!Array.isArray(items)) items = [items];
-    return { ...r, payload: undefined, items };
-  });
+  const rules = all('SELECT * FROM recurring_rules WHERE ledger_id = ? ORDER BY is_active DESC, next_run_at', ledgerId).map((r) => ({
+    ...r, payload: undefined, items: sch.ruleItems(r.payload),
+  }));
   ok(res, { rules });
 });
 
@@ -422,7 +444,9 @@ router.get('/settings', (req, res) => {
   });
 });
 
-router.get('/ai/models', async (req, res) => {
+router.get('/ai/models', requireSiteAdmin, async (req, res) => {
+  // 站点管理员专属：不带自定义 Key 时会回退到站点已保存的 Key 去请求 base_url，
+  // 若对普通成员开放，等于可让服务器把站点 AI Key 发到任意 URL（SSRF + 密钥外发）
   try {
     const r = await ai.listModels({ baseUrl: req.query.base_url, apiKey: req.headers['x-ai-api-key'] || undefined });
     ok(res, { base_url: r.baseUrl, count: r.count, models: r.models });
@@ -453,7 +477,7 @@ router.post('/transactions', requireWrite, (req, res) => {
 /* 批量操作：必须定义在 /transactions/:id 之前，否则 "bulk-*" 会被当成 id */
 router.post('/transactions/bulk-delete', requireWrite, (req, res) => {
   const { ledgerId } = req.openAuth;
-  const ids = [].concat((req.body || {}).ids || []).map(Number).filter(Boolean);
+  const ids = readBulkIds(req.body);
   if (!ids.length) return bad(res, 400, '请提供 ids 数组');
   const n = txn.bulkDelete(ids, ledgerId);
   auth.audit(req, 'api.txn.bulkDelete', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 批量删除 ${n} 笔` });
@@ -462,33 +486,38 @@ router.post('/transactions/bulk-delete', requireWrite, (req, res) => {
 
 router.post('/transactions/bulk-category', requireWrite, (req, res) => {
   const { ledgerId } = req.openAuth;
-  const ids = [].concat((req.body || {}).ids || []).map(Number).filter(Boolean);
-  const cid = Number((req.body || {}).category_id) || null;
+  const ids = readBulkIds(req.body);
+  const cid = validCategoryId(ledgerId, Number((req.body || {}).category_id));
   if (!ids.length || !cid) return bad(res, 400, '请提供 ids 与 category_id');
-  const c = get('SELECT id FROM categories WHERE id = ? AND (ledger_id IS NULL OR ledger_id = ?)', cid, ledgerId);
-  if (!c) return bad(res, 404, '分类不存在');
   const ph = ids.map(() => '?').join(',');
-  run(`UPDATE transactions SET category_id = ?, updated_at = ? WHERE ledger_id = ? AND id IN (${ph})`, cid, nowStr(), ledgerId, ...ids);
-  auth.audit(req, 'api.txn.bulkCategory', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 批量改分类 ${ids.length} 笔` });
-  ok(res, { updated: ids.length });
+  const info = run(`UPDATE transactions SET category_id = ?, updated_at = ? WHERE ledger_id = ? AND id IN (${ph})`, cid, nowStr(), ledgerId, ...ids);
+  auth.audit(req, 'api.txn.bulkCategory', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 批量改分类 ${info.changes} 笔` });
+  ok(res, { updated: info.changes });
 });
 
 router.post('/transactions/bulk-tag', requireWrite, (req, res) => {
   const { ledgerId } = req.openAuth;
-  const ids = [].concat((req.body || {}).ids || []).map(Number).filter(Boolean);
+  const ids = readBulkIds(req.body);
   const tag = String((req.body || {}).tag || '').trim();
   if (!ids.length || !tag) return bad(res, 400, '请提供 ids 与 tag');
-  for (const id of ids) txn.applyTags(id, ledgerId, tag, false);
-  auth.audit(req, 'api.txn.bulkTag', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 批量加标签「${tag}」` });
-  ok(res, { tagged: ids.length });
+  // 只给本账本存在且未删除的交易挂标签
+  const ph = ids.map(() => '?').join(',');
+  const owned = all(`SELECT id FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND id IN (${ph})`, ledgerId, ...ids).map((r) => Number(r.id));
+  for (const id of owned) txn.applyTags(id, ledgerId, tag, false);
+  auth.audit(req, 'api.txn.bulkTag', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 批量加标签「${tag}」${owned.length} 笔` });
+  ok(res, { tagged: owned.length });
 });
 
 router.post('/transactions/bulk-reimburse', requireWrite, (req, res) => {
   const { ledgerId, userId } = req.openAuth;
-  const ids = [].concat((req.body || {}).ids || []).map(Number).filter(Boolean);
+  const ids = readBulkIds(req.body);
   if (!ids.length) return bad(res, 400, '请提供 ids 数组');
+  // 未指定入账账户时回落到账本第一个可用账户，避免报销收入悬空
+  const accountId = (req.body || {}).account_id
+    ? validAccountId(ledgerId, Number(req.body.account_id))
+    : Number(get('SELECT id FROM accounts WHERE ledger_id = ? AND is_archived = 0 ORDER BY sort_order, id LIMIT 1', ledgerId)?.id) || null;
   try {
-    const r = txn.markReimbursed(ids, ledgerId, userId, (req.body || {}).account_id ? Number(req.body.account_id) : null);
+    const r = txn.markReimbursed(ids, ledgerId, userId, accountId);
     auth.audit(req, 'api.txn.bulkReimburse', { ledgerId, detail: `开放API·${req.openAuth.tokenName} 报销 ${r.count} 笔` });
     ok(res, { txn_id: r.txnId, count: r.count, total_cents: r.total });
   } catch (e) {
@@ -506,9 +535,11 @@ router.post('/transactions/:id', requireWrite, (req, res) => {
   try {
     const createdAccounts = [];
     // 显式给出的字段优先；未给出的沿用原值；按名称给账户/分类时才做名称解析
+    // 金额沿用原值时不取绝对值：adjust 交易是带符号的（调减为负），abs 会把调减翻成调增
+    const rawDate = body.date ?? body.txn_date;
     const merged = {
       type: body.type ?? old.type,
-      amount: body.amount_cents != null ? undefined : (body.amount ?? (Math.abs(Number(old.amount_cents)) / 100)),
+      amount: body.amount_cents != null ? undefined : (body.amount ?? (Number(old.amount_cents) / 100)),
       amount_cents: body.amount_cents ?? undefined,
       currency: body.currency ?? old.currency,
       account_id: body.account_id ?? (body.account != null ? undefined : old.account_id),
@@ -517,7 +548,7 @@ router.post('/transactions/:id', requireWrite, (req, res) => {
       to_account: body.to_account,
       category_id: body.category_id ?? (body.category != null ? undefined : old.category_id),
       category: body.category,
-      date: body.date ?? body.txn_date ?? old.txn_date,
+      date: rawDate != null ? (DATE_RE.test(String(rawDate)) ? rawDate : old.txn_date) : old.txn_date,
       note: body.note ?? old.note ?? '',
       merchant: body.merchant ?? old.merchant ?? '',
       tags: body.tags ?? old.tag_names ?? '',
@@ -550,6 +581,8 @@ router.post('/transactions/:id/restore', requireWrite, (req, res) => {
   if (!r) return bad(res, 404, '没有可恢复的已删除记录');
   run('UPDATE transactions SET deleted_at = NULL, updated_at = ? WHERE id = ?', nowStr(), id);
   require('../db').recalcBalances(ledgerId);
+  // 借贷类交易恢复后同步重建自动汇总台账
+  txn.syncDebts(ledgerId);
   auth.audit(req, 'api.txn.restore', { ledgerId, entity: 'transaction', entityId: id });
   ok(res, { restored: id });
 });
@@ -852,12 +885,13 @@ router.post('/debts', requireWrite, (req, res) => {
   const amount = body.amount_cents != null ? Math.abs(Math.round(Number(body.amount_cents) || 0)) : Math.abs(cents(body.amount));
   const direction = body.direction === 'receivable' || body.direction === '借出' ? 'receivable' : 'payable';
   if (!counterparty || !amount) return bad(res, 400, '请填写对方名称与金额');
+  const accountId = validAccountId(ledgerId, body.account_id);
   if (body.create_txn) {
     try {
       const txnId = txn.createTransaction(ledgerId, userId, {
         type: direction === 'receivable' ? 'lend' : 'borrow',
         amount_cents: amount,
-        account_id: body.account_id || null,
+        account_id: accountId,
         txn_date: DATE_RE.test(String(body.date || '')) ? body.date : todayStr(),
         merchant: counterparty,
         note: body.note || (direction === 'receivable' ? '借出' : '借入'),
@@ -873,7 +907,7 @@ router.post('/debts', requireWrite, (req, res) => {
     `INSERT INTO debts (ledger_id, direction, counterparty, principal_cents, balance_cents, currency, account_id, due_date, status, note, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     ledgerId, direction, counterparty.slice(0, 40), amount, amount, body.currency || 'CNY',
-    body.account_id || null, DATE_RE.test(String(body.due_date || '')) ? body.due_date : null, 'open',
+    accountId, DATE_RE.test(String(body.due_date || '')) ? body.due_date : null, 'open',
     body.note ? String(body.note).slice(0, 200) : null, nowStr()
   );
   auth.audit(req, 'api.debt.create', { ledgerId, entity: 'debt', entityId: info.lastInsertRowid, detail: `${direction} ${counterparty}` });
@@ -895,7 +929,7 @@ router.post('/debts/:id/settle', requireWrite, (req, res) => {
     const txnId = txn.createTransaction(ledgerId, userId, {
       type: d.direction === 'receivable' ? 'repay_receive' : 'repay_pay',
       amount_cents: amount,
-      account_id: body.account_id || d.account_id,
+      account_id: validAccountId(ledgerId, body.account_id) || d.account_id,
       txn_date: DATE_RE.test(String(body.date || '')) ? body.date : todayStr(),
       merchant: d.counterparty,
       note: (d.direction === 'receivable' ? '收回借款 · ' : '偿还借款 · ') + d.counterparty,
@@ -939,8 +973,8 @@ router.post('/budgets', requireWrite, (req, res) => {
       trigger_type, rollover, alert_pct, start_date, end_date, is_active, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)`,
     ledgerId, name.slice(0, 30), scope,
-    scope === 'category' && body.category_id ? Number(body.category_id) : null,
-    scope === 'account' && body.account_id ? Number(body.account_id) : null,
+    scope === 'category' ? validCategoryId(ledgerId, body.category_id) : null,
+    scope === 'account' ? validAccountId(ledgerId, body.account_id) : null,
     ['monthly', 'yearly', 'weekly', 'custom'].includes(body.period) ? body.period : 'monthly',
     amount, body.currency || 'CNY',
     body.trigger_type === 'income' ? 'income' : 'expense',
@@ -961,6 +995,7 @@ function findBudget(req, res) {
 }
 
 router.post('/budgets/:id', requireWrite, (req, res) => {
+  const ledgerId = req.openAuth.ledgerId;
   const b = findBudget(req, res);
   if (!b) return;
   const body = req.body || {};
@@ -969,8 +1004,8 @@ router.post('/budgets/:id', requireWrite, (req, res) => {
       rollover=?, alert_pct=?, start_date=?, end_date=?, is_active=? WHERE id=?`,
     String(body.name || b.name).slice(0, 30),
     ['overall', 'category', 'account'].includes(body.scope) ? body.scope : b.scope,
-    body.category_id != null ? Number(body.category_id) : b.category_id,
-    body.account_id != null ? Number(body.account_id) : b.account_id,
+    body.category_id != null ? validCategoryId(ledgerId, body.category_id) : b.category_id,
+    body.account_id != null ? validAccountId(ledgerId, body.account_id) : b.account_id,
     ['monthly', 'yearly', 'weekly', 'custom'].includes(body.period) ? body.period : b.period,
     body.amount != null ? Math.abs(cents(body.amount)) : (body.amount_cents != null ? Math.abs(Math.round(Number(body.amount_cents) || 0)) : Number(b.amount_cents)),
     body.trigger_type === 'income' ? 'income' : body.trigger_type === 'expense' ? 'expense' : b.trigger_type,
@@ -989,6 +1024,7 @@ router.post('/budgets/:id/toggle', requireWrite, (req, res) => {
   const b = findBudget(req, res);
   if (!b) return;
   run('UPDATE budgets SET is_active = ? WHERE id = ?', b.is_active ? 0 : 1, b.id);
+  auth.audit(req, 'api.budget.toggle', { ledgerId: req.openAuth.ledgerId, entity: 'budget', entityId: b.id, detail: b.is_active ? '停用' : '启用' });
   ok(res, { id: b.id, is_active: !b.is_active });
 });
 
@@ -1012,7 +1048,7 @@ router.post('/goals', requireWrite, (req, res) => {
     'INSERT INTO goals (ledger_id, name, icon, target_cents, saved_cents, account_id, target_date, status, note, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
     ledgerId, name.slice(0, 30), String(body.icon || '🎯').slice(0, 8), target,
     body.saved_cents != null ? Math.round(Number(body.saved_cents) || 0) : (body.saved_amount ? cents(body.saved_amount) : 0),
-    body.account_id || null,
+    validAccountId(ledgerId, body.account_id),
     DATE_RE.test(String(body.target_date || '')) ? body.target_date : null, 'active',
     body.note ? String(body.note).slice(0, 200) : null, nowStr()
   );
@@ -1020,7 +1056,7 @@ router.post('/goals', requireWrite, (req, res) => {
   ok(res, { id: Number(info.lastInsertRowid) });
 });
 
-/** 存入 / 取出（amount 为负即取出）；create_txn=true 时同步记一笔流水 */
+/** 存入 / 取出（amount 为负即取出）；create_txn=true 时同步记一笔流水（与进度更新同事务） */
 router.post('/goals/:id/deposit', requireWrite, (req, res) => {
   const { ledgerId, userId } = req.openAuth;
   const g = get('SELECT * FROM goals WHERE id = ? AND ledger_id = ?', Number(req.params.id), ledgerId);
@@ -1030,22 +1066,22 @@ router.post('/goals/:id/deposit', requireWrite, (req, res) => {
   if (!delta) return bad(res, 400, '请填写金额（取出请填负数）');
   const saved = Math.max(0, Number(g.saved_cents) + delta);
   const status = saved >= Number(g.target_cents) ? 'done' : 'active';
-  run('UPDATE goals SET saved_cents = ?, status = ? WHERE id = ?', saved, status, g.id);
+  const accountId = validAccountId(ledgerId, body.account_id) || g.account_id;
+  const { tx } = require('../db');
   let txnId = null;
-  if (body.create_txn) {
-    try {
+  tx(() => {
+    run('UPDATE goals SET saved_cents = ?, status = ? WHERE id = ?', saved, status, g.id);
+    if (body.create_txn) {
       txnId = txn.createTransaction(ledgerId, userId, {
         type: delta > 0 ? 'expense' : 'income',
         amount_cents: Math.abs(delta),
-        account_id: body.account_id || g.account_id || null,
+        account_id: accountId,
         txn_date: todayStr(),
         note: `储蓄目标「${g.name}」${delta > 0 ? '存入' : '取出'}`,
         source: 'manual',
       });
-    } catch (e) {
-      return bad(res, 400, e.message);
     }
-  }
+  });
   if (status === 'done') {
     for (const uid of auth.ledgerWriterIds(ledgerId)) {
       auth.notify(uid, { kind: 'success', ledgerId, title: `🎉 储蓄目标达成：${g.name}`, link: '/goals' });
@@ -1065,17 +1101,16 @@ router.post('/goals/:id/delete', requireWrite, (req, res) => {
 
 /* -------------------------------- 订阅扣费 -------------------------------- */
 
-const SUB_CYCLE_LABEL = { monthly: '每月', quarterly: '每季', half_yearly: '每半年', yearly: '每年', weekly: '每周' };
-
 /** 订阅请求体（与网页表单同语义；amount 单位：元） */
+const SUB_CYCLES = new Set(['monthly', 'quarterly', 'half_yearly', 'yearly', 'weekly']);
 function readSubBody(body) {
   const DAY = /^\d{4}-\d{2}-\d{2}$/;
-  const cycle = SUB_CYCLE_LABEL[body.cycle] || ['monthly', 'quarterly', 'half_yearly', 'yearly', 'weekly'].includes(body.cycle) ? body.cycle : 'monthly';
+  const cycle = SUB_CYCLES.has(body.cycle) ? body.cycle : 'monthly';
   const cycleN = Math.max(1, Math.min(12, Number(body.cycle_n) || 1));
   const anchorDay = Math.max(1, Math.min(31, Number(body.anchor_day) || Number(todayStr().slice(8, 10))));
   const anchorMonth = body.anchor_month ? Math.max(1, Math.min(12, Number(body.anchor_month))) : null;
   const trialEnds = DAY.test(String(body.trial_ends_on || '')) ? body.trial_ends_on : null;
-  const status = ['trial', 'active', 'paused'].includes(body.status) ? body.status : 'active';
+  const status = ['trial', 'active', 'paused', 'canceled'].includes(body.status) ? body.status : 'active';
   let next = DAY.test(String(body.next_charge_at || '')) ? body.next_charge_at : '';
   if (!next && trialEnds) next = trialEnds;
   if (!next) next = todayStr();
@@ -1105,6 +1140,8 @@ router.post('/subscriptions', requireWrite, (req, res) => {
   const d = readSubBody(req.body || {});
   if (!d.name) return bad(res, 400, '请填写订阅名称');
   if (!d.amount_cents) return bad(res, 400, '请填写每期扣费金额');
+  d.account_id = validAccountId(ledgerId, d.account_id);
+  d.category_id = validCategoryId(ledgerId, d.category_id);
   const info = run(
     `INSERT INTO subscriptions (ledger_id, name, icon, plan, vendor_url, amount_cents, currency, cycle, cycle_n,
       anchor_month, anchor_day, account_id, category_id, auto_renew, trial_ends_on, next_charge_at,
@@ -1129,13 +1166,19 @@ router.post('/subscriptions/:id', requireWrite, (req, res) => {
   const old = findSub(req, res);
   if (!old) return;
   const body = req.body || {};
+  // 关键：显式抹掉 spread 带进来的 old.amount_cents，否则它恒非空、用户传的 amount 永远被忽略；
+  // status 沿用 old（含 canceled——编辑已取消订阅不应把它复活成生效中）
   const d = readSubBody({
     ...old,
     ...body,
-    amount: body.amount ?? (old.amount_cents / 100),
+    amount_cents: body.amount_cents ?? undefined,
+    amount: body.amount ?? (body.amount_cents != null ? undefined : (Number(old.amount_cents) / 100)),
+    status: body.status ?? (['trial', 'active', 'paused', 'canceled'].includes(old.status) ? old.status : 'active'),
     next_charge_at: body.next_charge_at ?? old.next_charge_at,
   });
   if (!d.name || !d.amount_cents) return bad(res, 400, '名称与金额不能为空');
+  d.account_id = validAccountId(ledgerId, d.account_id);
+  d.category_id = validCategoryId(ledgerId, d.category_id);
   run(
     `UPDATE subscriptions SET name=?, icon=?, plan=?, vendor_url=?, amount_cents=?, currency=?, cycle=?, cycle_n=?,
       anchor_month=?, anchor_day=?, account_id=?, category_id=?, auto_renew=?, trial_ends_on=?, next_charge_at=?,
@@ -1155,7 +1198,7 @@ router.post('/subscriptions/:id/charge', requireWrite, (req, res) => {
   const body = req.body || {};
   const txnId = subs.charge(sub, userId, { date: DATE_RE.test(String(body.date || '')) ? body.date : todayStr() });
   if (!txnId) return bad(res, 400, '订阅金额为 0，无法记账');
-  require('../db').recalcBalances(ledgerId);
+  // subs.charge 内部（非 silent）已 recalcBalances，无需重复
   auth.audit(req, 'api.subscription.charge', { ledgerId, entity: 'subscription', entityId: sub.id, detail: String(sub.amount_cents) });
   ok(res, { txn_id: txnId, amount_cents: Number(sub.amount_cents) });
 });
@@ -1165,6 +1208,7 @@ router.post('/subscriptions/:id/skip', requireWrite, (req, res) => {
   if (!sub) return;
   const next = subs.advance(sub.next_charge_at, sub);
   run('UPDATE subscriptions SET next_charge_at = ? WHERE id = ?', next, sub.id);
+  auth.audit(req, 'api.subscription.skip', { ledgerId: req.openAuth.ledgerId, entity: 'subscription', entityId: sub.id, detail: `顺延至 ${next}` });
   ok(res, { id: sub.id, next_charge_at: next });
 });
 
@@ -1173,6 +1217,7 @@ router.post('/subscriptions/:id/toggle', requireWrite, (req, res) => {
   if (!sub) return;
   const back = sub.status === 'paused' || sub.status === 'canceled';
   run('UPDATE subscriptions SET status = ?, canceled_at = ? WHERE id = ?', back ? 'active' : 'paused', back ? null : sub.canceled_at, sub.id);
+  auth.audit(req, 'api.subscription.toggle', { ledgerId: req.openAuth.ledgerId, entity: 'subscription', entityId: sub.id, detail: back ? '恢复' : '暂停' });
   ok(res, { id: sub.id, status: back ? 'active' : 'paused' });
 });
 
@@ -1208,8 +1253,8 @@ router.post('/recurring', requireWrite, (req, res) => {
     items.push({
       type: TYPE_ALIASES[String(it.type || 'expense').trim()] || 'expense',
       amount_cents: amt,
-      category_id: it.category_id ? Number(it.category_id) : null,
-      account_id: it.account_id ? Number(it.account_id) : null,
+      category_id: validCategoryId(ledgerId, it.category_id),
+      account_id: validAccountId(ledgerId, it.account_id),
       note: it.note || name,
       currency: 'CNY',
     });
@@ -1243,9 +1288,7 @@ router.post('/recurring/:id/run', requireWrite, (req, res) => {
   const { ledgerId, userId } = req.openAuth;
   const r = findRule(req, res);
   if (!r) return;
-  let payload;
-  try { payload = JSON.parse(r.payload); } catch { payload = []; }
-  const items = Array.isArray(payload) ? payload : [payload];
+  const items = sch.ruleItems(r.payload);
   const ids = [];
   for (const p of items) {
     const amt = Math.abs(Number(p.amount_cents) || 0);
@@ -1254,21 +1297,24 @@ router.post('/recurring/:id/run', requireWrite, (req, res) => {
       `INSERT INTO transactions (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id,
         to_account_id, category_id, user_id, txn_date, note, merchant, status, source, created_at, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      ledgerId, p.type || 'expense', amt, 'CNY', 1, amt, p.account_id || null, null, p.category_id || null,
+      ledgerId, p.type || 'expense', amt, 'CNY', 1, amt, validAccountId(ledgerId, p.account_id), null,
+      validCategoryId(ledgerId, p.category_id),
       userId, todayStr(), p.note || r.name, null, 'cleared', 'recurring', nowStr(), nowStr()
     );
     ids.push(Number(info.lastInsertRowid));
   }
-  run('UPDATE recurring_rules SET last_run_at = ?, next_run_at = ? WHERE id = ?', nowStr(), sch.advanceDate(r.next_run_at, r), r.id);
+  const nextRun = sch.advanceDate(r.next_run_at, r);
+  run('UPDATE recurring_rules SET last_run_at = ?, next_run_at = ? WHERE id = ?', nowStr(), nextRun, r.id);
   require('../db').recalcBalances(ledgerId);
   auth.audit(req, 'api.recurring.run', { ledgerId, entity: 'recurring', entityId: r.id, detail: `记账 ${ids.length} 笔` });
-  ok(res, { txn_ids: ids, next_run_at: sch.advanceDate(r.next_run_at, r) });
+  ok(res, { txn_ids: ids, next_run_at: nextRun });
 });
 
 router.post('/recurring/:id/toggle', requireWrite, (req, res) => {
   const r = findRule(req, res);
   if (!r) return;
   run('UPDATE recurring_rules SET is_active = ? WHERE id = ?', r.is_active ? 0 : 1, r.id);
+  auth.audit(req, 'api.recurring.toggle', { ledgerId: req.openAuth.ledgerId, entity: 'recurring', entityId: r.id, detail: r.is_active ? '停用' : '启用' });
   ok(res, { id: r.id, is_active: !r.is_active });
 });
 
@@ -1321,6 +1367,12 @@ router.post('/settings/ai/test', requireWrite, requireSiteAdmin, async (req, res
 });
 
 /* ------------------------------- API 兜底 -------------------------------- */
+
+/** 路由内未捕获异常统一 JSON 500（不带会话上下文，落到网页错误页会渲染失败） */
+router.use((err, req, res, _next) => {
+  console.error('[openapi]', err);
+  res.status(err.status || err.statusCode || 500).json({ ok: false, error: err.message || '服务器内部错误' });
+});
 
 router.use((req, res) => {
   res.status(404).json({ ok: false, error: `接口不存在：${req.method} ${req.path}` });

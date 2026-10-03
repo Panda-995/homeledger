@@ -198,11 +198,12 @@ app.use((req, res) => {
 
 app.use((err, req, res, _next) => {
   console.error('[error]', err);
+  const status = Number(err.status || err.statusCode) >= 400 ? Number(err.status || err.statusCode) : 500;
   const message = err?.message || '服务器内部错误';
   if ((req.headers.accept || '').includes('application/json') || req.xhr) {
-    return res.status(500).json({ ok: false, error: message });
+    return res.status(status).json({ ok: false, error: message });
   }
-  res.status(500).render('error', { title: '出错了', message });
+  res.status(status).render('error', { title: '出错了', message });
 });
 
 /* ---------------------------------- 启动 ---------------------------------- */

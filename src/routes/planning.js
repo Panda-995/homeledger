@@ -126,9 +126,7 @@ router.get('/recurring', auth.requireLogin, (req, res) => {
      FROM recurring_rules r WHERE r.ledger_id = ? ORDER BY r.is_active DESC, r.next_run_at`,
     ledgerId
   ).map((r) => {
-    let items = [];
-    try { items = JSON.parse(r.payload); } catch { items = []; }
-    if (!Array.isArray(items)) items = [items];
+    const items = sch.ruleItems(r.payload);
     const cats = fd.flatCategories(ledgerId);
     const accs = fd.accounts(ledgerId);
     const total = items.reduce((s, i) => s + Number(i.amount_cents || 0), 0);
@@ -202,9 +200,7 @@ router.post('/recurring/:id/run', auth.requireLogin, auth.requireLedgerWrite, (r
   const ledgerId = Number(res.locals.ledger.id);
   const r = get('SELECT * FROM recurring_rules WHERE id = ? AND ledger_id = ?', Number(req.params.id), ledgerId);
   if (!r) { res.flash('error', '规则不存在'); return res.redirect('/recurring'); }
-  let payload;
-  try { payload = JSON.parse(r.payload); } catch { payload = []; }
-  const items = Array.isArray(payload) ? payload : [payload];
+  const items = sch.ruleItems(r.payload);
   tx(() => {
     for (const p of items) {
       const amt = Math.abs(Number(p.amount_cents) || 0);

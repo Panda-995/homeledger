@@ -1,6 +1,6 @@
 {
   "name": "homeledger",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "private": true,
   "description": "家账簿 HomeLedger —— 自托管家庭记账系统：全类型记账 + AI 截图/文本自动记账 + 开放 API，纯后端 SSR，数据自持于 SQLite",
   "main": "server.js",

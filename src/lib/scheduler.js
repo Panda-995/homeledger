@@ -38,30 +38,40 @@ function advanceDate(dateStr, rule) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** 解包周期账单 payload：兼容 {items:[…], user_id} 包装、纯数组、单对象三种历史格式 */
+function ruleItems(payload) {
+  let p = payload;
+  try { p = typeof payload === 'string' ? JSON.parse(payload) : payload; } catch { return []; }
+  if (Array.isArray(p)) return p;
+  if (p && Array.isArray(p.items)) return p.items;
+  return p ? [p] : [];
+}
+
 function runDueRecurring(today = todayStr()) {
   const rules = all('SELECT * FROM recurring_rules WHERE is_active = 1 AND next_run_at <= ?', today);
   const { recalcBalances } = require('../db');
   let created = 0;
   const touchedLedgers = new Set();
   for (const rule of rules) {
-    let payload;
-    try { payload = JSON.parse(rule.payload); } catch { continue; }
-    const items = Array.isArray(payload) ? payload : [payload];
+    const items = ruleItems(rule.payload);
     tx(() => {
-      for (const p of items) {
-        const amount = Math.abs(Number(p.amount_cents) || 0);
-        if (!amount) continue;
-        run(
-          `INSERT INTO transactions
-           (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id, to_account_id, category_id,
-            user_id, txn_date, note, merchant, status, source, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          rule.ledger_id, p.type || 'expense', amount, p.currency || 'CNY', 1, amount,
-          p.account_id || null, p.to_account_id || null, p.category_id || null,
-          payload.user_id || rule.created_by_user_id || 1, rule.next_run_at,
-          p.note || rule.name, p.merchant || null, 'cleared', 'recurring', nowStr(), nowStr()
-        );
-        created++;
+      // 仅自动记账规则真正落库；非自动模式只提醒（否则不推进 next_run_at 会被 30 分钟轮询反复记账）
+      if (rule.auto_post) {
+        for (const p of items) {
+          const amount = Math.abs(Number(p.amount_cents) || 0);
+          if (!amount) continue;
+          run(
+            `INSERT INTO transactions
+             (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id, to_account_id, category_id,
+              user_id, txn_date, note, merchant, status, source, created_at, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            rule.ledger_id, p.type || 'expense', amount, p.currency || 'CNY', 1, amount,
+            p.account_id || null, p.to_account_id || null, p.category_id || null,
+            rule.created_by_user_id || 1, rule.next_run_at,
+            p.note || rule.name, p.merchant || null, 'cleared', 'recurring', nowStr(), nowStr()
+          );
+          created++;
+        }
       }
       if (rule.auto_post) {
         run('UPDATE recurring_rules SET last_run_at = ?, next_run_at = ? WHERE id = ?', rule.next_run_at, advanceDate(rule.next_run_at, rule), rule.id);
@@ -286,4 +296,4 @@ function initScheduler() {
   return timer;
 }
 
-module.exports = { initScheduler, runDaily, runDueRecurring, runSubscriptions, checkBudgets, checkDebts, checkGoals, budgetPeriodRange, budgetUsedInRange, budgetUsed, advanceDate };
+module.exports = { initScheduler, runDaily, runDueRecurring, runSubscriptions, checkBudgets, checkDebts, checkGoals, budgetPeriodRange, budgetUsedInRange, budgetUsed, advanceDate, ruleItems };
