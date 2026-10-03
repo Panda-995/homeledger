@@ -51,7 +51,7 @@ function readForm(body, userId) {
     name: name.slice(0, 40),
     icon: String(body.icon || '🧾').slice(0, 8) || '🧾',
     plan: body.plan ? String(body.plan).slice(0, 40) : null,
-    vendor_url: body.vendor_url ? String(body.vendor_url).slice(0, 200) : null,
+    vendor_url: u.safeExternalUrl(body.vendor_url),
     amount_cents: Math.abs(amount),
     currency: body.currency || 'CNY',
     cycle, cycle_n: cycleN,

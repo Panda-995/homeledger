@@ -4,13 +4,13 @@
   "description": "自托管的家庭记账系统，支持截图 AI 自动记账",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f6fb",
-  "theme_color": "#4f7cff",
+  "background_color": "#f3f5f9",
+  "theme_color": "#3d6df5",
   "lang": "zh-CN",
   "icons": [
     {
       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%234f7cff'/%3E%3Ctext x='96' y='132' font-size='104' text-anchor='middle'%3E%F0%9F%93%92%3C/text%3E%3C/svg%3E",
-      "sizes": "192x192",
+      "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     }

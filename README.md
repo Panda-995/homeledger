@@ -44,6 +44,8 @@ docker compose up -d
 
 打开 `http://<NAS或服务器的IP>:5111` 即可使用。
 
+> **权限提示**：容器以非 root 用户（UID 1000）运行。若 `./data` 由 root 创建，首次启动会因无写权限而崩溃重启，请先执行 `mkdir -p data && sudo chown -R 1000:1000 data`，或在 compose 中给服务加 `user: "0:0"`。
+
 | 配置项 | 说明 |
 | --- | --- |
 | `image` | 预构建镜像（本仓库 GitHub Actions 自动发布，`ghcr.milu.moe` 为加速中转，直连可换 `ghcr.io/panda-995/homeledger:latest`），无需本地构建 |
@@ -65,7 +67,7 @@ docker run -d --name homeledger --restart unless-stopped -p 5111:5111 \
 
 ```bash
 git clone https://github.com/Panda-995/homeledger.git && cd homeledger
-docker compose up -d          # 仓库自带 docker-compose.yml（build: . 本地构建）
+docker compose up -d          # 默认拉取 ghcr.milu.moe 预构建镜像；想本地构建请注释 image 行并取消 build 行注释
 ```
 
 ### 首次启动

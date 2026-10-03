@@ -3,5 +3,21 @@ npm-debug.log
 .git
 .gitignore
 data
-*.md
+data-verify-*
+*.log
 .env
+*.md
+# 本地构建产物与测试数据，绝不能进镜像层
+.screenshots
+dist
+.tmp
+*.fpk
+ui-*.png
+*-out.txt
+_cc.txt
+# 非运行时必需目录
+test
+packaging
+.github
+skills
+openclaw-skill

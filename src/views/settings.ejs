@@ -397,7 +397,7 @@
       <div class="kv"><span class="k">数据目录</span><span class="v mono" style="font-size:11px"><%= envInfo.dataDir %></span></div>
       <div class="kv"><span class="k">数据库大小</span><span class="v"><%= (envInfo.dbSize / 1024).toFixed(1) %> KB</span></div>
       <div class="kv"><span class="k">数据库文件</span><span class="v mono" style="font-size:11px">homeledger.db</span></div>
-      <div class="kv"><span class="k">备份方式</span><span class="v">复制 data 目录即可（<a href="/export">导出备份</a><%= isAdmin ? ' 或 <a href="/backup/db">下载数据库备份</a>' : '' %>）</span></div>
+      <div class="kv"><span class="k">备份方式</span><span class="v">复制 data 目录即可（<a href="/export">导出备份</a><% if (isAdmin) { %> 或 <a href="/backup/db">下载数据库备份</a><% } %>）</span></div>
     </div>
   </div>
 </div>

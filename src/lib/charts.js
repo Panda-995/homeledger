@@ -3,7 +3,10 @@
  * 服务端 SVG 图表引擎
  * 全部图表在服务端渲染成内联 SVG：无需前端图表库、无外网依赖、NAS 离线可用
  */
-const { esc, fmtAmount, monthShort, relDate } = require('./util');
+const { esc, fmtAmount, monthShort, relDate, safeColor } = require('./util');
+
+/** 渲染前统一过颜色白名单：调用方漏校验也不会变成 SVG/HTML 属性注入 */
+const col = (v, fallback) => safeColor(v, fallback || '#8c8c8c');
 
 const C = {
   grid: '#eceff4',
@@ -66,9 +69,9 @@ function barChart({ labels = [], series = [], height = 240, showLegend = true, v
       const h = max > 0 ? (v / max) * innerH : 0;
       const y = padT + innerH - h;
       if (h > 0.5) {
-        s += `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${se.color}"><title>${esc(se.name)} ${esc(lab)}：${nf(v)}${esc(valueUnit)}</title></rect>`;
+        s += `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(se.color)}"><title>${esc(se.name)} ${esc(lab)}：${nf(v)}${esc(valueUnit)}</title></rect>`;
       } else {
-        s += `<rect x="${x0.toFixed(1)}" y="${(padT + innerH - 1.5).toFixed(1)}" width="${barW.toFixed(1)}" height="1.5" rx="0.75" fill="${se.color}" opacity="0.25"/>`;
+        s += `<rect x="${x0.toFixed(1)}" y="${(padT + innerH - 1.5).toFixed(1)}" width="${barW.toFixed(1)}" height="1.5" rx="0.75" fill="${col(se.color)}" opacity="0.25"/>`;
       }
       x0 += barW + gap;
     });
@@ -78,7 +81,7 @@ function barChart({ labels = [], series = [], height = 240, showLegend = true, v
   if (showLegend) {
     let lx = padL;
     series.forEach((se) => {
-      s += `<rect x="${lx}" y="10" width="10" height="10" rx="2" fill="${se.color}"/>`;
+      s += `<rect x="${lx}" y="10" width="10" height="10" rx="2" fill="${col(se.color)}"/>`;
       s += `<text x="${lx + 15}" y="19" font-size="12" fill="${C.text}">${esc(se.name)}</text>`;
       lx += 15 + se.name.length * 12 + 22;
     });
@@ -108,8 +111,8 @@ function lineChart({ labels = [], series = [], height = 220, fill = true, valueU
   s += `<defs>`;
   series.forEach((se, si) => {
     s += `<linearGradient id="lg${si}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${se.color}" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="${se.color}" stop-opacity="0.02"/></linearGradient>`;
+      <stop offset="0%" stop-color="${col(se.color)}" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="${col(se.color)}" stop-opacity="0.02"/></linearGradient>`;
   });
   s += `</defs>`;
   for (let i = 0; i <= 4; i++) {
@@ -125,9 +128,9 @@ function lineChart({ labels = [], series = [], height = 220, fill = true, valueU
     if (fill) {
       s += `<path d="${d} L${pts[pts.length - 1][0].toFixed(1)},${(padT + innerH).toFixed(1)} L${pts[0][0].toFixed(1)},${(padT + innerH).toFixed(1)} Z" fill="url(#lg${si})"/>`;
     }
-    s += `<path d="${d}" fill="none" stroke="${se.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    s += `<path d="${d}" fill="none" stroke="${col(se.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     pts.forEach((p, i) => {
-      s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.8" fill="#fff" stroke="${se.color}" stroke-width="2"><title>${esc(se.name)} ${esc(labels[i])}：${nf(se.data[i])}${esc(valueUnit)}</title></circle>`;
+      s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.8" fill="#fff" stroke="${col(se.color)}" stroke-width="2"><title>${esc(se.name)} ${esc(labels[i])}：${nf(se.data[i])}${esc(valueUnit)}</title></circle>`;
     });
   });
   labels.forEach((lab, i) => {
@@ -136,7 +139,7 @@ function lineChart({ labels = [], series = [], height = 220, fill = true, valueU
   });
   let lx = padL;
   series.forEach((se) => {
-    s += `<line x1="${lx}" y1="14" x2="${lx + 14}" y2="14" stroke="${se.color}" stroke-width="2.5" stroke-linecap="round"/>`;
+    s += `<line x1="${lx}" y1="14" x2="${lx + 14}" y2="14" stroke="${col(se.color)}" stroke-width="2.5" stroke-linecap="round"/>`;
     s += `<text x="${lx + 19}" y="18" font-size="12" fill="${C.text}">${esc(se.name)}</text>`;
     lx += 19 + se.name.length * 12 + 20;
   });
@@ -160,7 +163,7 @@ function donutChart(items = [], { size = 200, thickness = 26, centerTitle = '', 
       const v = Math.abs(Number(it.value) || 0);
       if (v <= 0) return;
       const len = (v / total) * circ;
-      s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${it.color}"
+      s += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col(it.color)}"
         stroke-width="${thickness}" stroke-dasharray="${(len - 2).toFixed(2)} ${(circ - len + 2).toFixed(2)}"
         stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt">
         <title>${esc(it.name)}：${nf(v)}${esc(valueUnit)}（${((v / total) * 100).toFixed(1)}%）</title></circle>`;
@@ -185,9 +188,9 @@ function donutLegend(items = [], total = null, valueUnit = '') {
       const v = Math.abs(Number(it.value) || 0);
       const p = sum ? ((v / sum) * 100).toFixed(1) : '0.0';
       return `<div class="legend-row">
-        <span class="legend-dot" style="background:${it.color}"></span>
+        <span class="legend-dot" style="background:${col(it.color)}"></span>
         <span class="legend-name">${esc(it.name)}</span>
-        <span class="legend-bar"><i style="width:${p}%;background:${it.color}"></i></span>
+        <span class="legend-bar"><i style="width:${p}%;background:${col(it.color)}"></i></span>
         <span class="legend-pct">${p}%</span>
         <span class="legend-val">${nf(v)}${esc(valueUnit)}</span>
       </div>`;
@@ -204,7 +207,7 @@ function rankBars(items = [], { valueUnit = '', max: maxOverride = null } = {}) 
       (it, idx) => `<div class="rank-row">
       <span class="rank-idx">${idx + 1}</span>
       <span class="rank-name" title="${esc(it.name)}">${esc(it.name)}</span>
-      <span class="rank-track"><i style="width:${Math.max((Math.abs(it.value) / max) * 100, 1.5).toFixed(1)}%;background:${it.color || C.primary}"></i></span>
+      <span class="rank-track"><i style="width:${Math.max((Math.abs(it.value) / max) * 100, 1.5).toFixed(1)}%;background:${col(it.color, C.primary)}"></i></span>
       <span class="rank-val">${nf(it.value)}${esc(valueUnit)}</span>
     </div>`
     )

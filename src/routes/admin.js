@@ -299,7 +299,7 @@ router.post('/ledgers', auth.requireLogin, (req, res) => {
     'INSERT INTO ledgers (name, kind, currency, icon, color, owner_id, note, created_at) VALUES (?,?,?,?,?,?,?,?)',
     name.slice(0, 30),
     ['personal', 'family', 'business', 'travel', 'project'].includes(req.body.kind) ? req.body.kind : 'personal',
-    currency, req.body.icon || '📒', req.body.color || u.colorFor(name), req.session.userId,
+    currency, req.body.icon || '📒', u.safeColor(req.body.color, u.colorFor(name)), req.session.userId,
     req.body.note ? String(req.body.note).slice(0, 200) : null, nowStr()
   );
   addLedgerMember(info.lastInsertRowid, req.session.userId, 'owner');
@@ -317,7 +317,7 @@ router.post('/ledgers/:id', auth.requireLogin, auth.requireLedgerManage, (req, r
   run('UPDATE ledgers SET name=?, kind=?, currency=?, icon=?, color=?, note=?, sort_order=? WHERE id=?',
     String(req.body.name || l.name).slice(0, 30), req.body.kind || l.kind,
     String(req.body.currency || l.currency).slice(0, 8),
-    req.body.icon || l.icon, req.body.color || l.color,
+    req.body.icon || l.icon, u.safeColor(req.body.color, l.color),
     req.body.note ? String(req.body.note).slice(0, 200) : null,
     Number(req.body.sort_order) || l.sort_order, id);
   res.flash('success', '账本信息已更新');

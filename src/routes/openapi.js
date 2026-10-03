@@ -1120,7 +1120,7 @@ function readSubBody(body) {
     name: String(body.name || '').trim().slice(0, 40),
     icon: String(body.icon || '🧾').slice(0, 8) || '🧾',
     plan: body.plan ? String(body.plan).slice(0, 40) : null,
-    vendor_url: body.vendor_url ? String(body.vendor_url).slice(0, 200) : null,
+    vendor_url: u.safeExternalUrl(body.vendor_url),
     amount_cents: Math.abs(body.amount_cents != null ? Math.round(Number(body.amount_cents) || 0) : cents(body.amount)),
     currency: body.currency || 'CNY',
     cycle, cycle_n: cycleN, anchor_month: anchorMonth, anchor_day: anchorDay,

@@ -164,8 +164,18 @@
     btn.addEventListener('keydown', (e) => {
       if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); toggle(true); }
     });
-    document.addEventListener('click', (e) => { if (open && !wrap.contains(e.target)) toggle(false); });
-    window.addEventListener('resize', () => { if (open) place(); });
+    // 外部点击关闭 / 窗口缩放重定位：用单例委托（注册一次），避免每个实例往 document/window
+    // 挂常驻监听——AI 页反复识别会不断新建实例，逐实例监听只增不减（内存泄漏）
+    wrap._hlPlace = place;
+    if (!document._hlSelectDelegated) {
+      document._hlSelectDelegated = true;
+      document.addEventListener('click', (e) => {
+        $$('.hl-select.open').forEach((w) => { if (!w.contains(e.target)) w.classList.remove('open'); });
+      });
+      window.addEventListener('resize', () => {
+        $$('.hl-select.open').forEach((w) => { if (w._hlPlace) w._hlPlace(); });
+      });
+    }
     sel.addEventListener('change', renderLabel);
     // 外部脚本改 innerHTML / value 后调用 sel._hlRefresh() 同步触发态
     sel._hlRefresh = () => { renderLabel(); if (open) buildMenu(); };
@@ -243,7 +253,7 @@
         });
         if (type === 'transfer') $('#f-cat-wrap') && $('#f-cat-wrap').classList.add('hidden');
         else $('#f-cat-wrap') && $('#f-cat-wrap').classList.remove('hidden');
-        $$('.cat-kind').forEach((el) => el.classList.toggle('hidden', el.dataset.catKind !== (type === 'income' ? 'income' : 'expense')));
+        // 分类区块按 data-cat-kind 切换（.cat-kind 是历史遗留的死选择器，已移除）
       });
     });
 
@@ -687,6 +697,7 @@
         });
         sel.classList.remove('hidden');
         if (modelInput.value && res.models.some((m) => m.id === modelInput.value)) sel.value = modelInput.value;
+        if (sel._hlRefresh) sel._hlRefresh(); // 动态填充后同步 hl-select 触发器标签
         out.className = 'notice mt8';
         out.textContent = '✅ 读到 ' + res.models.length + ' 个模型，请在下拉框中选择要用的那个';
       });
@@ -723,6 +734,8 @@
   }
 
   /* ============================ 批量选择 ============================ */
+  // 单笔删除后也要刷新批量条状态，通过闭包里的 refreshBulk 互通
+  let refreshBulk = null;
   function initBulk() {
     const master = $('#bulk-all');
     const boxes = $$('.bulk-item');
@@ -732,17 +745,28 @@
       boxes.forEach((b) => { b.checked = master.checked; });
       update();
     });
+    // 「全选本日」：勾选该日期组内的全部交易
+    $$('.bulk-all-day').forEach((dayBox) => {
+      dayBox.addEventListener('change', () => {
+        const day = dayBox.closest('.txn-day');
+        if (!day) return;
+        $$('.bulk-item', day).forEach((b) => { b.checked = dayBox.checked; });
+        update();
+      });
+    });
     boxes.forEach((b) => b.addEventListener('change', update));
     function update() {
-      const n = boxes.filter((b) => b.checked).length;
+      const liveBoxes = $$('.bulk-item'); // 行可能被单笔删除移除，实时收集
+      const n = liveBoxes.filter((b) => b.checked).length;
       if (bar) {
         bar.classList.toggle('hidden', n === 0);
         const cnt = $('#bulk-count');
         if (cnt) cnt.textContent = n;
       }
-      master.indeterminate = n > 0 && n < boxes.length;
-      master.checked = n === boxes.length && n > 0;
+      master.indeterminate = n > 0 && n < liveBoxes.length;
+      master.checked = n === liveBoxes.length && n > 0;
     }
+    refreshBulk = update;
   }
 
   /* ============================ 确认危险操作 ============================ */
@@ -788,6 +812,7 @@
         if (res.ok) {
           const row = btn.closest('.txn');
           if (row) row.remove();
+          if (refreshBulk) refreshBulk();
           toast('已删除', 'success');
         } else toast('删除失败', 'error');
       });

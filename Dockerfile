@@ -8,15 +8,17 @@ ENV TZ=Asia/Shanghai \
 
 WORKDIR /app
 
-# 先装依赖，利用镜像层缓存
-COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+# 先装依赖，利用镜像层缓存；lockfile 一并拷入 + npm ci，保证依赖版本可复现
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 
-# 再拷贝源码
-COPY . .
+# 再拷贝源码（--chown 一步到位，避免事后 chown -R 把整层应用文件复制一遍）
+COPY --chown=node:node . .
 
 # 数据卷：所有账本数据都在这里，备份=拷走这一个目录
-RUN mkdir -p /data && chown -R node:node /data /app
+# 注意：chown 只对具名卷/镜像内目录生效；bind mount（./data:/data）的属主沿用宿主机，
+#       NAS 上需 chown 1000:1000 ./data 或在 compose 里加 user
+RUN mkdir -p /data && chown -R node:node /data
 VOLUME ["/data"]
 
 USER node

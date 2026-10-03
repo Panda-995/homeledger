@@ -286,6 +286,15 @@ function safeColor(v, fallback = '#8c8c8c') {
   return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s) ? s : fallback;
 }
 
+/**
+ * 外链白名单：只允许 http/https 绝对地址，其余（javascript: 等伪协议、相对路径）置 null。
+ * 用于会渲染成 <a href> 的用户字段（如订阅管理页地址），防存储型 XSS。
+ */
+function safeExternalUrl(v) {
+  const s = String(v || '').trim();
+  return /^https?:\/\/\S+$/i.test(s) ? s.slice(0, 500) : null;
+}
+
 
 module.exports = {
   currencySymbol, fmtAmount, money, signedMoney, compactMoney, parseAmountToCents,
@@ -293,6 +302,6 @@ module.exports = {
   addDays, addMonths, monthOf, monthStart, monthEnd, daysInMonth,
   monthLabel, monthShort, lastMonths, monthDays, firstWeekday,
   pct, clamp, esc, truncate, colorFor, initials, uid, toBase, barPct,
-  auditAction, auditTarget, auditDetail, avatarUrl, jsonForScript, safeColor,
+  auditAction, auditTarget, auditDetail, avatarUrl, jsonForScript, safeColor, safeExternalUrl,
   PALETTE,
 };

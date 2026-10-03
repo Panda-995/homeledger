@@ -57,6 +57,12 @@ disable_authorization_path = true
 changelog             = v${VERSION}
 EOF
 
+# 图标：外层 ICON.* 供 .fpk 展示，ui/images 供桌面入口引用
+cp "$(dirname "$0")/ICON.PNG"    "${FPK_DIR}/ICON.PNG"
+cp "$(dirname "$0")/ICON_256.PNG" "${FPK_DIR}/ICON_256.PNG"
+cp "${FPK_DIR}/ICON.PNG"          "${FPK_DIR}/app/ui/images/icon_64.png"
+cp "${FPK_DIR}/ICON_256.PNG"      "${FPK_DIR}/app/ui/images/icon_256.png"
+
 cat > "${FPK_DIR}/config/privilege" <<'EOF'
 {
     "defaults":
