@@ -3,14 +3,14 @@
   var nextM = helpers.addMonths(month, 1);
 %>
 
-<div class="row between mb12">
-  <div class="row" style="gap:10px">
-    <a class="btn btn-sm" href="/calendar?month=<%= prevM %>">← 上月</a>
-    <h2><%= monthLabel %></h2>
-    <a class="btn btn-sm" href="/calendar?month=<%= nextM %>">下月 →</a>
-    <a class="btn btn-sm btn-ghost" href="/calendar">回到本月</a>
-  </div>
-  <div class="row" style="gap:14px">
+<div class="card tight mb12">
+  <div class="cal-nav">
+    <a class="btn btn-sm btn-icon" href="/calendar?month=<%= prevM %>" aria-label="上个月"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></a>
+    <span class="cal-title"><%= monthLabel %></span>
+    <a class="btn btn-sm btn-icon" href="/calendar?month=<%= nextM %>" aria-label="下个月"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></a>
+    <span class="spacer"></span>
+    <a class="btn btn-sm btn-ghost" href="/calendar">本月</a>
+    <span class="spacer"></span>
     <span class="small">支出 <b class="amount expense"><%= helpers.fmtAmount(monthSummary.expense) %></b></span>
     <span class="small">收入 <b class="amount income"><%= helpers.fmtAmount(monthSummary.income) %></b></span>
     <span class="small">结余 <b class="amount <%= monthSummary.net >= 0 ? 'income' : 'expense' %>"><%= helpers.fmtAmount(monthSummary.net) %></b></span>
@@ -26,7 +26,7 @@
         <% cells.forEach(function(c){ %>
           <% if (!c) { %><div class="cal-cell empty"></div><% } else { %>
             <a class="cal-cell active <%= c.date === today ? 'today' : '' %>" href="/calendar?month=<%= month %>&date=<%= c.date %>"
-               style="text-decoration:none;color:inherit;<%= c.count ? 'background:rgba(245,34,45,' + (0.04 + Math.min(c.expense / (maxExpense || 1), 1) * 0.14).toFixed(3) + ')' : '' %>">
+               style="text-decoration:none;color:inherit;<%= c.count ? 'background:color-mix(in srgb, var(--expense) ' + Math.round((0.04 + Math.min(c.expense / (maxExpense || 1), 1) * 0.12) * 100) + '%, var(--card))' : '' %>">
               <span class="d"><%= c.day %></span>
               <% if (c.expense) { %><span class="e">-<%= helpers.fmtAmount(c.expense, c.expense >= 100000 ? 0 : 2) %></span><% } %>
               <% if (c.income) { %><span class="i">+<%= helpers.fmtAmount(c.income, 2) %></span><% } %>

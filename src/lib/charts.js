@@ -247,10 +247,10 @@ function calendarHeatmap({ month, days = [], today = '' } = {}) {
     const dateStr = `${month}-${String(dayNum).padStart(2, '0')}`;
     const d = map.get(dateStr) || { expense: 0, income: 0, count: 0 };
     const intensity = Math.min((d.expense || 0) / maxExpense, 1);
-    const bg = d.expense > 0 ? `rgba(245,34,45,${(0.06 + intensity * 0.16).toFixed(3)})` : '#fafbfc';
+    const bg = d.expense > 0 ? `rgba(245,34,45,${(0.06 + intensity * 0.16).toFixed(3)})` : '';
     const isToday = dateStr === today;
-    s += `<rect x="${x}" y="${y0}" width="${w}" height="${h}" rx="8" fill="${bg}" stroke="${isToday ? C.primary : '#eef1f5'}" stroke-width="${isToday ? 1.6 : 1}"/>`;
-    s += `<text x="${x + 9}" y="${y0 + 17}" font-size="12" font-weight="600" fill="${isToday ? C.primary : '#475467'}">${dayNum}</text>`;
+    s += `<rect x="${x}" y="${y0}" width="${w}" height="${h}" rx="8" fill="${bg}" ${bg ? '' : 'class="hm-empty"'} stroke="${isToday ? C.primary : 'var(--border)'}" stroke-width="${isToday ? 1.6 : 1}"/>`;
+    s += `<text x="${x + 9}" y="${y0 + 17}" font-size="12" font-weight="600" fill="${isToday ? C.primary : 'var(--text-2)'}">${dayNum}</text>`;
     if (d.count > 0) {
       s += `<text x="${x + 9}" y="${(y0 + h - 18).toFixed(1)}" font-size="10.5" fill="${C.expense}" font-weight="600">-${fmtAmount(d.expense, d.expense >= 100000 ? 0 : 2)}</text>`;
       if (d.income > 0) s += `<text x="${x + 9}" y="${(y0 + h - 6).toFixed(1)}" font-size="10.5" fill="${C.income}" font-weight="600">+${fmtAmount(d.income, 2)}</text>`;
