@@ -850,8 +850,9 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 .ai-send:active { transform: scale(.94); }
 .ai-send:disabled { opacity: .5; cursor: not-allowed; }
 
-/* 桌面端：AI 助手入口在顶栏（悬浮球会遮挡右下内容，仅移动端保留） */
-@media (min-width: 821px) {
+/* 桌面端：AI 助手入口在顶栏（悬浮球会遮挡右下内容，仅移动端保留）。
+   触屏设备（横屏手机/平板）即使视口 ≥821px 也走移动形态：保留悬浮球 */
+@media (min-width: 821px) and (pointer: fine) {
   .ai-fab { display: none; }
   .ai-panel {
     top: calc(var(--topbar-h) + 8px); bottom: auto;
@@ -869,7 +870,7 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
   .grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   :root { --sidebar-w: 0px; --topbar-h: 54px; }
   .sidebar { display: none; }
   .content { padding: 14px 14px 92px; }
@@ -990,7 +991,7 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 
 /* ------------------------------ 移动端（≤820px） ------------------------------ */
 
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   /* 侧栏 → 抽屉：默认移出屏幕，body.nav-open 滑入 */
   .sidebar {
     position: fixed;
@@ -1092,7 +1093,10 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 @media (max-width: 480px) {
   .topbar h1 { font-size: 15.5px; }
   .btn-label { display: none; }   /* 「记一笔」收成纯图标 */
-  .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; }
+  /* grid-2/grid-3 是内容大卡（如报表排行），小屏保持单列；
+     只有 stat 卡（grid-4/5）才 2 列。此前把 grid-2 也拆两列，
+     导致报表排行卡只有 ~170px 宽、数值要横向滚动才能看到 */
+  .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; }
   .stat .value { font-size: 17px; }
   .stat .delta { font-size: 10.5px; }
   .txn-act { opacity: 1; }        /* 触屏无 hover：操作按钮常显 */
@@ -1130,7 +1134,7 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 @keyframes sheetIn { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* 手机端自适应补强：行内内容智能换行重排（而非溢出） */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   .row { flex-wrap: wrap; row-gap: 6px; }
   .row > * { min-width: 0; }
   .type-tabs { min-width: 0; }
@@ -1143,17 +1147,17 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 }
 
 /* grid/flex 子项允许收缩（1fr 轨道 min-width:auto 是横向溢出的常见根源） */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   .grid > *, .grid-main > *, .content .card, .content form { min-width: 0; }
 }
 
 /* 抽屉修复：原响应式块把 .sidebar 设为 display:none，抽屉模式必须改回 flex */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   body.nav-ready .sidebar { display: flex; }
 }
 
 /* 手机端交易行：防标题逐字竖排，操作按钮紧凑 */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   .txn { gap: 8px; }
   .txn-ico { width: 32px; height: 32px; flex-basis: 32px; border-radius: 10px; font-size: 16px; }
   .txn-title > span:not(.note) { flex-shrink: 0; white-space: nowrap; }
@@ -1164,7 +1168,7 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 }
 
 /* 手机端记一笔：卡片重排为 主表单 → 分类 → 保存 → AA/提示（display:contents 让卡片直接成为栅格项） */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   #txn-form .grid-main > div { display: contents; }
   #txn-form .grid-main > div:first-child > .card:first-child { order: 0; }
   #txn-form .grid-main > div:first-child > .card:last-child { order: 3; }
@@ -1176,7 +1180,7 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 /* 上一条 :last-child 修正（右列末尾还有提示条） */
 
 /* v1.4.1 补强：超长分类名不挤爆交易行；贴近视口右缘的下拉改右对齐 */
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   .txn-title > span:not(.note) { max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 }
 .hl-select-menu.right { left: auto; right: 0; }
@@ -1343,12 +1347,14 @@ html { scroll-behavior: smooth; }
 .cal-nav .cal-title { font-size: 16px; font-weight: 700; letter-spacing: -.01em; min-width: 110px; text-align: center; }
 .cal-nav .btn { min-width: 0; }
 
-@media (max-width: 820px) {
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1024px) {
   .cal-grid { gap: 3px; }
   .cal-cell { min-height: 44px; padding: 3px 4px; border-radius: 8px; }
   .cal-cell .d { font-size: 11px; }
   .cal-cell .e, .cal-cell .i { font-size: 9px; }
-  .cal-nav { flex-direction: row; flex-wrap: nowrap; }
+  /* 手机端导航行允许换行：月份统计换到第二行（nowrap 会把「结余」挤出屏幕） */
+  .cal-nav { flex-direction: row; flex-wrap: wrap; row-gap: 8px; }
+  .cal-nav .spacer { display: none; }
   .cal-nav .cal-title { flex: 1; }
 }
 
