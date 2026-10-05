@@ -1276,7 +1276,14 @@ html { scroll-behavior: smooth; }
 .hl-date-menu.right { left: auto; right: 0; }
 
 .hl-date-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.hl-date-title { flex: 1; text-align: center; font-weight: 650; font-size: 13.5px; }
+.hl-date-title { flex: 1; display: flex; align-items: center; justify-content: center; gap: 2px; text-align: center; font-weight: 650; font-size: 13.5px; }
+/* 标题里的年/月直达按钮：视觉与原纯文本标题一致，仅加悬停提示可点 */
+.hl-date-tb {
+  border: 0; background: none; padding: 4px 7px; border-radius: 8px;
+  font: inherit; font-size: 13.5px; font-weight: 650; color: var(--text);
+  cursor: pointer; transition: background-color .12s ease-in-out, color .12s ease-in-out;
+}
+.hl-date-tb:hover { background: var(--card-2); color: var(--primary); }
 .hl-date-nav {
   display: grid; place-items: center; width: 30px; height: 30px;
   border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--muted);
@@ -1364,6 +1371,13 @@ html { scroll-behavior: smooth; }
 /* 月份选择器格子（3×4） */
 .hl-date-mon-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .hl-date-cell.hl-date-mon {
+  height: 38px; font-size: 13px; border-radius: 8px;
+  display: grid; place-items: center;
+}
+
+/* 年份直达格子（4×3，规格与月份格一致） */
+.hl-date-yr-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.hl-date-cell.hl-date-yr {
   height: 38px; font-size: 13px; border-radius: 8px;
   display: grid; place-items: center;
 }

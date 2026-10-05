@@ -919,6 +919,10 @@
     let open = false;
     let menu = null;
     let vy = 0, vm = 0; // 面板正在浏览的年/月
+    // 视图状态：days=日格子（默认）；months=月格子（月输入框为终选 / 日输入框为中转）；years=年份直达
+    let view = 'days';
+    let yBase = 0;      // 年份视图当前页的起始年
+    let origin = 'days'; // 从哪个视图进入年份直达，选完回到哪
 
     const fmt = (d) => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
     const parse = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s || '') ? new Date(s + 'T00:00:00') : null);
@@ -936,6 +940,16 @@
       menu.setAttribute('role', 'dialog');
       // 面板内点击：选日期 / 翻月 / 今天 / 清除（menu 懒创建，监听必须在这里挂）
       menu.addEventListener('click', (e) => {
+        const goyears = e.target.closest('[data-goyears]');
+        if (goyears) { yBase = Math.floor(vy / 12) * 12; origin = view; view = 'years'; return setTimeout(renderPanel, 0); }
+        const gomons = e.target.closest('[data-gomons]');
+        if (gomons) { view = 'months'; return setTimeout(renderPanel, 0); }
+        const year = e.target.closest('[data-year]');
+        if (year) { vy = Number(year.dataset.year); view = origin; return setTimeout(renderPanel, 0); }
+        const ypage = e.target.closest('[data-ypage]');
+        if (ypage) { yBase += Number(ypage.dataset.ypage); return setTimeout(renderPanel, 0); }
+        const setmon = e.target.closest('[data-setmon]');
+        if (setmon) { vm = Number(setmon.dataset.setmon); view = 'days'; return setTimeout(renderPanel, 0); }
         const mon = e.target.closest('[data-mon]');
         if (mon) return pick(mon.dataset.mon);
         const yr = e.target.closest('[data-yr]');
@@ -981,45 +995,73 @@
     function renderPanel() {
       const isMonth = input.type === 'month';
       const sel = input.value;
-      const tStr = fmt(today());
-      if (isMonth) {
-        // 月选择模式：年份导航 + 12 月格子
-        const nowD = new Date();
-        const curYM = nowD.getFullYear() + '-' + pad2(nowD.getMonth() + 1);
+      const nowD = new Date();
+      const curYear = nowD.getFullYear();
+      const curMon = nowD.getMonth() + 1;
+
+      /* 年份直达视图：12 格翻页，点某年回到来源视图 */
+      if (view === 'years') {
+        let cells = '';
+        for (let y = yBase; y < yBase + 12; y++) {
+          const cls = 'hl-date-cell hl-date-yr' + (String(y) === String(sel).slice(0, 4) ? ' selected' : '') + (y === curYear ? ' today' : '');
+          cells += '<button type="button" class="' + cls + '" data-year="' + y + '">' + y + '</button>';
+        }
+        menu.innerHTML =
+          '<div class="hl-date-head">' +
+            '<button type="button" class="hl-date-nav" data-ypage="-12" aria-label="前 12 年"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></button>' +
+            '<div class="hl-date-title"><span>' + yBase + ' - ' + (yBase + 11) + '</span></div>' +
+            '<button type="button" class="hl-date-nav" data-ypage="12" aria-label="后 12 年"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></button>' +
+          '</div>' +
+          '<div class="hl-date-grid hl-date-yr-grid">' + cells + '</div>';
+        return;
+      }
+
+      /* 月份视图：月输入框是终选（data-mon 落值）；日输入框是直达中转（data-setmon 只切月） */
+      if (view === 'months') {
+        const curYM = curYear + '-' + pad2(curMon);
+        const final = isMonth;
         let cells = '';
         for (let m = 1; m <= 12; m++) {
           const ms = vy + '-' + pad2(m);
-          const cls = 'hl-date-cell hl-date-mon' + (ms === sel ? ' selected' : '') + (ms === curYM ? ' today' : '');
-          cells += '<button type="button" class="' + cls + '" data-mon="' + ms + '">' + m + ' 月</button>';
+          const active = final ? ms === sel : m === vm;
+          const cls = 'hl-date-cell hl-date-mon' + (active ? ' selected' : '') + (ms === curYM ? ' today' : '');
+          cells += '<button type="button" class="' + cls + '" data-' + (final ? 'mon' : 'setmon') + '="' + (final ? ms : m) + '">' + m + ' 月</button>';
         }
         menu.innerHTML =
           '<div class="hl-date-head">' +
             '<button type="button" class="hl-date-nav" data-yr="-1" aria-label="上一年"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></button>' +
-            '<span class="hl-date-title">' + vy + ' 年</span>' +
+            '<div class="hl-date-title"><button type="button" class="hl-date-tb" data-goyears>' + vy + ' 年</button></div>' +
             '<button type="button" class="hl-date-nav" data-yr="1" aria-label="下一年"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></button>' +
           '</div>' +
           '<div class="hl-date-grid hl-date-mon-grid">' + cells + '</div>' +
-          '<div class="hl-date-foot">' +
-            '<button type="button" class="hl-date-act" data-clear>清除</button>' +
-            '<span class="spacer"></span>' +
-            '<button type="button" class="hl-date-act" data-thismonth>本月</button>' +
-          '</div>';
+          (final
+            ? '<div class="hl-date-foot">' +
+                '<button type="button" class="hl-date-act" data-clear>清除</button>' +
+                '<span class="spacer"></span>' +
+                '<button type="button" class="hl-date-act" data-thismonth>本月</button>' +
+              '</div>'
+            : '');
         return;
       }
-      const tStr2 = tStr;
+
+      /* 日期视图：标题的年/月都可点直达 */
+      const tStr = fmt(today());
       const offset = (new Date(vy, vm - 1, 1).getDay() + 6) % 7;
       const days = new Date(vy, vm, 0).getDate();
       let cells = '';
       for (let i = 0; i < offset; i++) cells += '<span class="hl-date-cell blank"></span>';
       for (let d = 1; d <= days; d++) {
         const ds = vy + '-' + pad2(vm) + '-' + pad2(d);
-        const cls = 'hl-date-cell' + (ds === sel ? ' selected' : '') + (ds === tStr2 ? ' today' : '');
+        const cls = 'hl-date-cell' + (ds === sel ? ' selected' : '') + (ds === tStr ? ' today' : '');
         cells += '<button type="button" class="' + cls + '" data-day="' + ds + '">' + d + '</button>';
       }
       menu.innerHTML =
         '<div class="hl-date-head">' +
           '<button type="button" class="hl-date-nav" data-nav="-1" aria-label="上个月"><svg class="icon sm"><use href="#i-chevron-left"></use></svg></button>' +
-          '<span class="hl-date-title">' + vy + ' 年 ' + vm + ' 月</span>' +
+          '<div class="hl-date-title">' +
+            '<button type="button" class="hl-date-tb" data-goyears>' + vy + ' 年</button>' +
+            '<button type="button" class="hl-date-tb" data-gomons>' + vm + ' 月</button>' +
+          '</div>' +
           '<button type="button" class="hl-date-nav" data-nav="1" aria-label="下个月"><svg class="icon sm"><use href="#i-chevron-right"></use></svg></button>' +
         '</div>' +
         '<div class="hl-date-week">' + DATE_DOW.map((d) => '<span>' + d + '</span>').join('') + '</div>' +
@@ -1054,8 +1096,14 @@
             if (b) b.setAttribute('aria-expanded', 'false');
           }
         });
-        const base = parse(input.value) || today();
-        vy = base.getFullYear(); vm = base.getMonth() + 1;
+        view = input.type === 'month' ? 'months' : 'days';
+        const mv = String(input.value || '');
+        if (input.type === 'month' && /^\d{4}-\d{2}$/.test(mv)) {
+          vy = Number(mv.slice(0, 4)); vm = Number(mv.slice(5, 7));
+        } else {
+          const base = parse(input.value) || today();
+          vy = base.getFullYear(); vm = base.getMonth() + 1;
+        }
         ensureMenu();
         renderPanel();
         wrap.classList.add('open');
