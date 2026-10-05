@@ -41,10 +41,13 @@ function readForm(body, userId) {
   const status = ['trial', 'active', 'paused'].includes(body.status) ? body.status : 'active';
 
   // 首次扣费日：填了就用，填的日期已过则按周期顺延；试用中且未填则默认试用结束日。
-  // 不周期（仅记录）：没有下次扣费日，置为永久未来，不进入自动扣费/到期提醒队列
+  // 不周期（仅记录）：没有下次扣费日，置为永久未来，不进入自动扣费/到期提醒队列。
+  // 固定到期日：只有一个日期，原样保留（已过期也保留，表示"已到期待确认"）
   let next;
   if (cycle === 'none') {
     next = '9999-12-31';
+  } else if (cycle === 'fixed') {
+    next = DAY_RE.test(String(body.next_charge_at || '')) ? body.next_charge_at : todayStr();
   } else {
     next = DAY_RE.test(String(body.next_charge_at || '')) ? body.next_charge_at : '';
     if (!next && trialEnds) next = trialEnds;

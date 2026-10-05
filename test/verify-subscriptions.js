@@ -216,6 +216,30 @@ check('不周期可手动记一期且不推进下次扣费日', noneCharged > 0 
 const noneDeco = subs.overview(ledgerId).items.find((x) => x.id === idNone);
 check('不周期展示：仅记录 / 月均 0', noneDeco.dueLabel === '仅记录' && noneDeco.monthly_cents === 0);
 
+/* --- 固定到期日：cycle=fixed（只有一个日期，到期提醒、永不自动扣费） --- */
+check('cycleOf 接受 fixed', subs.cycleOf('fixed') === 'fixed');
+check('固定到期日文案', subs.cycleLabel('fixed') === '固定到期日');
+check('固定到期日不计月均/年化', subs.annualCents({ amount_cents: 9900, cycle: 'fixed' }) === 0 && subs.monthlyCents({ amount_cents: 9900, cycle: 'fixed' }) === 0);
+check('固定到期日 advance 原地不动', subs.advance('2026-10-05', { cycle: 'fixed' }) === '2026-10-05');
+const idFixed = addSub({ name: '域名固定到期', amount_cents: 6500, cycle: 'fixed', next_charge_at: shift(3) });
+const fixedRow = () => db.get('SELECT * FROM subscriptions WHERE id = ?', idFixed);
+const fixedDeco = subs.decorate(fixedRow());
+check('固定到期日展示：3 天后到期', fixedDeco.dueLabel === '3 天后到期', fixedDeco.dueLabel);
+const idFixedDue = addSub({ name: '今日到期的保险', amount_cents: 30000, cycle: 'fixed', next_charge_at: today, auto_renew: 1 });
+const fixedDueRow = () => db.get('SELECT * FROM subscriptions WHERE id = ?', idFixedDue);
+subs.runDue(today);
+check('固定到期日到期不自动扣费（即使开了自动续费）', fixedDueRow().charge_count === 0 && fixedDueRow().next_charge_at === today,
+  `charge_count=${fixedDueRow().charge_count} next=${fixedDueRow().next_charge_at}`);
+check('固定到期日到期会提醒待确认', Number(db.get('SELECT COUNT(*) AS c FROM notifications WHERE body LIKE ?', `%sub-hold:${idFixedDue}:%`).c) > 0);
+const beforeFixedTx = Number(db.get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ?', ledgerId).c);
+subs.charge(fixedRow(), uid);
+check('固定到期日可手动记一期且不改日期', fixedRow().charge_count === 1 && fixedRow().next_charge_at === shift(3) &&
+  Number(db.get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ?', ledgerId).c) === beforeFixedTx + 1);
+const overdueDeco = subs.decorate({ ...fixedRow(), next_charge_at: shift(-2) });
+check('固定到期日过期展示：已到期 2 天', overdueDeco.dueLabel === '已到期 2 天', overdueDeco.dueLabel);
+const sumsFixed = subs.overview(ledgerId);
+check('固定到期日进入即将扣费统计', sumsFixed.live.some((s) => s.id === idFixedDue && s.daysLeft === 0), `候选 ${sumsFixed.live.filter((s) => s.daysLeft !== null && s.daysLeft <= 7).length} 条`);
+
 /* ============================ B. HTTP 端到端 ============================ */
 
 const BASE = 'http://127.0.0.1:8099';

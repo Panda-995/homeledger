@@ -66,20 +66,22 @@
                 <div class="tiny muted mt8">
                   <span class="chip <%= it.statusKind %>" style="margin-right:6px"><%= it.statusLabel %></span>
                   <span class="chip" style="margin-right:6px"><%= it.cycleLabel %></span>
-                  <% if (it.cycle !== 'none') { %><% if (it.auto_renew) { %><span class="chip primary">到期自动记账</span><% } else { %><span class="chip warn">仅提醒</span><% } %><% } %>
+                  <% if (it.cycle !== 'none' && it.cycle !== 'fixed') { %><% if (it.auto_renew) { %><span class="chip primary">到期自动记账</span><% } else { %><span class="chip warn">仅提醒</span><% } %><% } %>
                   <% if (it.trial_ends_on) { %><span class="chip <%= it.trialDue ? 'warn' : '' %>">试用至 <%= it.trial_ends_on %></span><% } %>
                 </div>
               </div>
             </div>
             <div class="right">
               <div class="amount expense" style="font-size:18px"><%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.amount_cents) %></div>
-              <div class="tiny muted"><% if (it.cycle === 'none') { %>不周期 · 手动记账<% } else { %><%= it.cycleLabel %> · 月均 <%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.monthly_cents) %><% } %></div>
+              <div class="tiny muted"><% if (it.cycle === 'none') { %>不周期 · 手动记账<% } else if (it.cycle === 'fixed') { %>固定到期日 · 到期提醒<% } else { %><%= it.cycleLabel %> · 月均 <%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.monthly_cents) %><% } %></div>
             </div>
           </div>
 
           <div class="row wrap mt12 tiny muted" style="gap:14px">
             <% if (it.cycle === 'none') { %>
               <span>记录型订阅：不自动扣费，需要时手动记一期</span>
+            <% } else if (it.cycle === 'fixed') { %>
+              <span>到期日：<b class="<%= it.daysLeft !== null && it.daysLeft <= 3 && it.daysLeft >= 0 ? 'amount expense' : '' %>"><%= it.next_charge_at %></b>（<%= it.dueLabel %>，到期只提醒不扣费）</span>
             <% } else { %>
             <span><%= it.status === 'canceled' ? '已取消' : '下次扣费' %>：<b class="<%= it.daysLeft !== null && it.daysLeft <= 3 && it.status !== 'canceled' ? 'amount expense' : '' %>"><%= it.next_charge_at %></b>
               <% if (it.status !== 'canceled') { %>（<%= it.dueLabel %>）<% } %></span>
@@ -198,7 +200,7 @@
           <div class="field" style="flex:1">
             <label>计费周期</label>
             <select name="cycle" id="sub-cycle">
-              <% [['monthly','每月'],['quarterly','每季'],['half_yearly','每半年'],['yearly','每年'],['weekly','每周'],['none','不周期（仅记录）']].forEach(function(c){ %>
+              <% [['monthly','每月'],['quarterly','每季'],['half_yearly','每半年'],['yearly','每年'],['weekly','每周'],['fixed','固定到期日'],['none','不周期（仅记录）']].forEach(function(c){ %>
                 <option value="<%= c[0] %>" <%= val('cycle', 'monthly') === c[0] ? 'selected' : '' %>><%= c[1] %></option>
               <% }); %>
             </select>
@@ -301,14 +303,20 @@
     });
   });
 
-  // 不周期（仅记录）：周期相关字段收起
+  // 固定到期日 / 不周期（仅记录）：周期相关字段收起；固定到期日保留下方日期框（标签换成"到期日"）
   var cycSel = document.getElementById('sub-cycle');
+  var nextLabel = document.querySelector('#f-next label');
   function cycleToggle() {
-    var none = cycSel && cycSel.value === 'none';
-    ['f-cycle-n', 'f-anchor-day', 'f-anchor-month', 'f-next'].forEach(function (id) {
+    var val = cycSel ? cycSel.value : 'monthly';
+    var none = val === 'none';
+    var fixed = val === 'fixed';
+    ['f-cycle-n', 'f-anchor-day', 'f-anchor-month'].forEach(function (id) {
       var el = document.getElementById(id);
-      if (el) el.classList.toggle('hidden', !!none);
+      if (el) el.classList.toggle('hidden', none || fixed);
     });
+    var nextEl = document.getElementById('f-next');
+    if (nextEl) nextEl.classList.toggle('hidden', none);
+    if (nextLabel) nextLabel.textContent = fixed ? '到期日' : '下次扣费日';
   }
   if (cycSel) { cycSel.addEventListener('change', cycleToggle); cycleToggle(); }
 })();
