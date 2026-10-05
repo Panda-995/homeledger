@@ -66,20 +66,24 @@
                 <div class="tiny muted mt8">
                   <span class="chip <%= it.statusKind %>" style="margin-right:6px"><%= it.statusLabel %></span>
                   <span class="chip" style="margin-right:6px"><%= it.cycleLabel %></span>
-                  <% if (it.auto_renew) { %><span class="chip primary">到期自动记账</span><% } else { %><span class="chip warn">仅提醒</span><% } %>
+                  <% if (it.cycle !== 'none') { %><% if (it.auto_renew) { %><span class="chip primary">到期自动记账</span><% } else { %><span class="chip warn">仅提醒</span><% } %><% } %>
                   <% if (it.trial_ends_on) { %><span class="chip <%= it.trialDue ? 'warn' : '' %>">试用至 <%= it.trial_ends_on %></span><% } %>
                 </div>
               </div>
             </div>
             <div class="right">
               <div class="amount expense" style="font-size:18px"><%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.amount_cents) %></div>
-              <div class="tiny muted"><%= it.cycleLabel %> · 月均 <%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.monthly_cents) %></div>
+              <div class="tiny muted"><% if (it.cycle === 'none') { %>不周期 · 手动记账<% } else { %><%= it.cycleLabel %> · 月均 <%= helpers.currencySymbol(it.currency) %><%= helpers.fmtAmount(it.monthly_cents) %><% } %></div>
             </div>
           </div>
 
           <div class="row wrap mt12 tiny muted" style="gap:14px">
+            <% if (it.cycle === 'none') { %>
+              <span>记录型订阅：不自动扣费，需要时手动记一期</span>
+            <% } else { %>
             <span><%= it.status === 'canceled' ? '已取消' : '下次扣费' %>：<b class="<%= it.daysLeft !== null && it.daysLeft <= 3 && it.status !== 'canceled' ? 'amount expense' : '' %>"><%= it.next_charge_at %></b>
               <% if (it.status !== 'canceled') { %>（<%= it.dueLabel %>）<% } %></span>
+            <% } %>
             <% if (it.last_charge_at) { %><span>上次扣费：<%= it.last_charge_at %></span><% } %>
             <% if (it.account_name) { %><span>账户：<%= it.account_name %></span><% } %>
             <% if (it.category_name) { %><span>分类：<%= it.category_icon || '' %> <%= it.category_name %></span><% } %>
@@ -194,27 +198,27 @@
           <div class="field" style="flex:1">
             <label>计费周期</label>
             <select name="cycle" id="sub-cycle">
-              <% [['monthly','每月'],['quarterly','每季'],['half_yearly','每半年'],['yearly','每年'],['weekly','每周']].forEach(function(c){ %>
+              <% [['monthly','每月'],['quarterly','每季'],['half_yearly','每半年'],['yearly','每年'],['weekly','每周'],['none','不周期（仅记录）']].forEach(function(c){ %>
                 <option value="<%= c[0] %>" <%= val('cycle', 'monthly') === c[0] ? 'selected' : '' %>><%= c[1] %></option>
               <% }); %>
             </select>
           </div>
-          <div class="field" style="flex:0 0 84px">
+          <div class="field" style="flex:0 0 84px" id="f-cycle-n">
             <label>每几期</label>
             <input type="number" name="cycle_n" min="1" max="12" value="<%= val('cycle_n', 1) %>">
           </div>
-          <div class="field" style="flex:0 0 84px">
+          <div class="field" style="flex:0 0 84px" id="f-anchor-day">
             <label>扣费日</label>
             <input type="number" name="anchor_day" min="1" max="31" value="<%= val('anchor_day', Number(today.slice(8, 10))) %>">
           </div>
-          <div class="field" style="flex:0 0 92px">
+          <div class="field" style="flex:0 0 92px" id="f-anchor-month">
             <label>年付月份</label>
             <input type="number" name="anchor_month" min="1" max="12" value="<%= val('anchor_month', '') %>" placeholder="选填">
           </div>
         </div>
 
         <div class="row" style="gap:8px">
-          <div class="field" style="flex:1">
+          <div class="field" style="flex:1" id="f-next">
             <label>下次扣费日</label>
             <input type="date" name="next_charge_at" value="<%= val('next_charge_at', today) %>">
           </div>
@@ -290,9 +294,22 @@
     btn.addEventListener('click', function () {
       form.querySelector('[name=name]').value = btn.dataset.name || '';
       form.querySelector('[name=icon]').value = btn.dataset.icon || '🧾';
-      form.querySelector('[name=cycle]').value = btn.dataset.cycle || 'monthly';
+      var cyc = form.querySelector('[name=cycle]');
+      cyc.value = btn.dataset.cycle || 'monthly';
+      cyc.dispatchEvent(new Event('change', { bubbles: true }));
       form.querySelector('[name=amount]').focus();
     });
   });
+
+  // 不周期（仅记录）：周期相关字段收起
+  var cycSel = document.getElementById('sub-cycle');
+  function cycleToggle() {
+    var none = cycSel && cycSel.value === 'none';
+    ['f-cycle-n', 'f-anchor-day', 'f-anchor-month', 'f-next'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden', !!none);
+    });
+  }
+  if (cycSel) { cycSel.addEventListener('change', cycleToggle); cycleToggle(); }
 })();
 </script>

@@ -40,12 +40,18 @@ function readForm(body, userId) {
   const trialEnds = DAY_RE.test(String(body.trial_ends_on || '')) ? body.trial_ends_on : null;
   const status = ['trial', 'active', 'paused'].includes(body.status) ? body.status : 'active';
 
-  // 首次扣费日：填了就用，填的日期已过则按周期顺延；试用中且未填则默认试用结束日
-  let next = DAY_RE.test(String(body.next_charge_at || '')) ? body.next_charge_at : '';
-  if (!next && trialEnds) next = trialEnds;
-  if (!next) next = todayStr();
-  let guard = 0;
-  while (next < todayStr() && guard++ < 500) next = subs.advance(next, { cycle, cycle_n: cycleN, anchor_day: anchorDay });
+  // 首次扣费日：填了就用，填的日期已过则按周期顺延；试用中且未填则默认试用结束日。
+  // 不周期（仅记录）：没有下次扣费日，置为永久未来，不进入自动扣费/到期提醒队列
+  let next;
+  if (cycle === 'none') {
+    next = '9999-12-31';
+  } else {
+    next = DAY_RE.test(String(body.next_charge_at || '')) ? body.next_charge_at : '';
+    if (!next && trialEnds) next = trialEnds;
+    if (!next) next = todayStr();
+    let guard = 0;
+    while (next < todayStr() && guard++ < 500) next = subs.advance(next, { cycle, cycle_n: cycleN, anchor_day: anchorDay });
+  }
 
   return {
     name: name.slice(0, 40),

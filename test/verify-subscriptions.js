@@ -201,6 +201,21 @@ check('订阅扣费计入账户余额（支出为负）', accBalance === -totalE
 check('订阅流水可通过 source 筛选出一条 SQL 查出来',
   db.all("SELECT id FROM transactions WHERE ledger_id = ? AND source = 'subscription'", ledgerId).length >= 5);
 
+/* --- 不周期（仅记录）：cycle=none --- */
+check('cycleOf 接受 none（未知值仍回退 monthly）', subs.cycleOf('none') === 'none' && subs.cycleOf('whatever') === 'monthly');
+check('不周期文案', subs.cycleLabel('none') === '不周期');
+check('不周期不计月均/年化', subs.annualCents({ amount_cents: 1200, cycle: 'none' }) === 0 && subs.monthlyCents({ amount_cents: 1200, cycle: 'none' }) === 0);
+check('不周期首扣日为永久未来', subs.firstChargeDate({ cycle: 'none' }) === '9999-12-31');
+const idNone = addSub({ name: '记录型订阅', amount_cents: 9900, cycle: 'none', next_charge_at: '9999-12-31', anchor_day: 1 });
+const noneRow = () => db.get('SELECT * FROM subscriptions WHERE id = ?', idNone);
+const runDueStat = subs.runDue(today);
+check('不周期订阅不被自动扣费', noneRow().charge_count === 0 && noneRow().next_charge_at === '9999-12-31', `runDue ${JSON.stringify(runDueStat)}`);
+check('不周期不在即将扣费/本月待扣统计里', !subs.overview(ledgerId).upcoming || subs.overview(ledgerId).upcoming.id !== idNone);
+const noneCharged = subs.charge(noneRow(), uid);
+check('不周期可手动记一期且不推进下次扣费日', noneCharged > 0 && noneRow().charge_count === 1 && noneRow().next_charge_at === '9999-12-31' && noneRow().last_charge_at === today);
+const noneDeco = subs.overview(ledgerId).items.find((x) => x.id === idNone);
+check('不周期展示：仅记录 / 月均 0', noneDeco.dueLabel === '仅记录' && noneDeco.monthly_cents === 0);
+
 /* ============================ B. HTTP 端到端 ============================ */
 
 const BASE = 'http://127.0.0.1:8099';

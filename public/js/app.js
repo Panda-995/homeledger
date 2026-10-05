@@ -939,7 +939,12 @@
         const mon = e.target.closest('[data-mon]');
         if (mon) return pick(mon.dataset.mon);
         const yr = e.target.closest('[data-yr]');
-        if (yr) { vy += Number(yr.dataset.yr); return renderPanel(); }
+        if (yr) {
+          vy += Number(yr.dataset.yr);
+          // 重绘会替换 innerHTML、摘除正冒泡中的按钮节点，document 委托关层会把已脱离
+          // DOM 的点击目标误判为外部点击而关掉弹层；推迟到冒泡结束后再重绘
+          return setTimeout(renderPanel, 0);
+        }
         const thisMon = e.target.closest('[data-thismonth]');
         if (thisMon) {
           const d = today(); vy = d.getFullYear(); vm = d.getMonth() + 1;
@@ -953,7 +958,8 @@
           vm += Number(nav.dataset.nav);
           if (vm > 12) { vm = 1; vy++; }
           if (vm < 1) { vm = 12; vy--; }
-          return renderPanel();
+          // 同 data-yr：推迟重绘，避免冒泡中的按钮节点被摘除后误触发外部关层
+          return setTimeout(renderPanel, 0);
         }
         if (e.target.closest('[data-today]')) {
           const d = today(); vy = d.getFullYear(); vm = d.getMonth() + 1;
@@ -1033,8 +1039,11 @@
     }
 
     function toggle(force) {
-      const want = force === undefined ? !open : force;
-      if (want === open) return;
+      // 外部点击由 document 委托关闭（不经本闭包），开合状态以 DOM class 为准，
+      // 否则委托关过一次后再点触发钮会出现"第一次点击没反应"
+      const cur = wrap.classList.contains('open');
+      const want = force === undefined ? !cur : force;
+      if (want === cur) return;
       open = want;
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open) {

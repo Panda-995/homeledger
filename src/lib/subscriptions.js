@@ -23,7 +23,7 @@ const { pad } = require('./util');
 
 /** 计费周期 → 月数（weekly 单独算） */
 const CYCLE_MONTHS = { monthly: 1, quarterly: 3, half_yearly: 6, yearly: 12 };
-const CYCLE_LABEL = { weekly: '每周', monthly: '每月', quarterly: '每季', half_yearly: '每半年', yearly: '每年' };
+const CYCLE_LABEL = { weekly: '每周', monthly: '每月', quarterly: '每季', half_yearly: '每半年', yearly: '每年', none: '不周期' };
 const CYCLE_UNIT = { weekly: '周', monthly: '月', quarterly: '季', half_yearly: '半年', yearly: '年' };
 const STATUS_LABEL = { trial: '试用中', active: '生效中', paused: '已暂停', canceled: '已取消' };
 /** 状态 → 视图 chip 配色（对应 .chip 的变体类） */
@@ -31,7 +31,9 @@ const STATUS_KIND = { trial: 'primary', active: 'income', paused: 'warn', cancel
 /** 单次补记上限：NAS 停机久了不至于一次性生成几十笔 */
 const MAX_CATCHUP = 6;
 
-const cycleOf = (v) => (CYCLE_MONTHS[v] || v === 'weekly' ? v : 'monthly');
+/* none = 不周期（仅记录）：不自动扣费、不计入订阅月均/年化 */
+const NONE_NEXT = '9999-12-31';
+const cycleOf = (v) => (CYCLE_MONTHS[v] || v === 'weekly' || v === 'none' ? v : 'monthly');
 const cycleLabel = (cycle, n = 1) => {
   const c = cycleOf(cycle);
   const times = Math.max(1, Number(n) || 1);
@@ -80,6 +82,7 @@ function advance(dateStr, sub = {}) {
  */
 function firstChargeDate({ cycle, cycle_n, anchor_month, anchor_day, startFrom = todayStr() }) {
   const c = cycleOf(cycle);
+  if (c === 'none') return NONE_NEXT; // 不周期：没有"下次扣费日"
   const from = String(startFrom).slice(0, 10);
   const startDay = Number(from.slice(8, 10));
   const day = Math.max(1, Math.min(31, Number(anchor_day) || startDay));
@@ -116,6 +119,7 @@ function annualCents(sub) {
   const amount = Math.abs(Number(sub.amount_cents) || 0);
   const c = cycleOf(sub.cycle);
   const n = Math.max(1, Number(sub.cycle_n) || 1);
+  if (c === 'none') return 0; // 不周期没有摊销口径
   if (c === 'weekly') return Math.round((amount * 52) / n);
   return Math.round((amount * 12) / (CYCLE_MONTHS[c] * n));
 }
@@ -129,7 +133,8 @@ function monthlyCents(sub) {
 
 /** 单条订阅补齐展示字段 */
 function decorate(sub, extras = {}) {
-  const left = daysUntil(sub.next_charge_at);
+  const noCycle = cycleOf(sub.cycle) === 'none';
+  const left = noCycle ? null : daysUntil(sub.next_charge_at);
   const monthEq = monthlyCents(sub);
   const trialLeft = sub.trial_ends_on ? daysUntil(sub.trial_ends_on) : null;
   return {
@@ -141,7 +146,7 @@ function decorate(sub, extras = {}) {
     annual_cents: annualCents(sub),
     // 相对月付的节省（年付一般更便宜，这里只做展示：正数表示比按月付费便宜）
     daysLeft: left,
-    dueLabel: left === null ? '—' : left < 0 ? `已逾期 ${-left} 天` : left === 0 ? '今天扣费' : `${left} 天后`,
+    dueLabel: noCycle ? '仅记录' : left === null ? '—' : left < 0 ? `已逾期 ${-left} 天` : left === 0 ? '今天扣费' : `${left} 天后`,
     trialLeft,
     trialDue: trialLeft !== null && trialLeft >= 0 && trialLeft <= 7,
     ...extras,
@@ -221,9 +226,11 @@ function charge(sub, userId, { date = todayStr(), silent = false } = {}) {
     date, `订阅扣费 · ${label}`, sub.name, 'cleared', 'subscription',
     Number(sub.id), nowStr(), nowStr()
   );
+  // 不周期订阅：手动记账后不推进"下次扣费日"（保持永久未来，不进入自动扣费队列）
+  const isNone = cycleOf(sub.cycle) === 'none';
   run(
     'UPDATE subscriptions SET last_charge_at = ?, next_charge_at = ?, charge_count = charge_count + 1 WHERE id = ?',
-    date, advance(date, sub), Number(sub.id)
+    date, isNone ? sub.next_charge_at : advance(date, sub), Number(sub.id)
   );
   if (!silent) {
     try { require('../db').recalcBalances(Number(sub.ledger_id)); } catch { /* 余额重算失败不影响记账 */ }

@@ -1,0 +1,14 @@
+<%
+  /** 预算「按分类」下拉选项：大分类（整个大分类）+ 其下子分类。
+      局部变量：cats（flatCategories 结果，含 parent_id/path/icon）、selectedId（当前选中，可空） */
+  var selOf = function (id) { return Number(selectedId) === Number(id) ? 'selected' : ''; };
+%>
+<option value="">请选择…</option>
+<% cats.forEach(function(c){ if (!c.parent_id) { %>
+  <optgroup label="<%= c.name %>">
+    <option value="<%= c.id %>" <%= selOf(c.id) %>><%= c.icon %> <%= c.name %>（整个大分类）</option>
+    <% cats.filter(function(x){ return Number(x.parent_id) === Number(c.id); }).forEach(function(x){ %>
+      <option value="<%= x.id %>" <%= selOf(x.id) %>><%= x.path %></option>
+    <% }); %>
+  </optgroup>
+<% } }); %>

@@ -85,18 +85,26 @@
               <div class="field" style="flex:1;min-width:110px"><label>预警线 %</label><input type="number" name="alert_pct" min="10" max="100" value="<%= b.alert_pct %>"></div>
             </div>
             <div class="row wrap" style="gap:10px">
-              <div class="field" style="flex:1;min-width:120px"><label>范围</label><select name="scope">
+              <div class="field f-scope" style="flex:1;min-width:120px"><label>范围</label><select name="scope">
                 <option value="overall" <%= b.scope === 'overall' ? 'selected' : '' %>>总预算</option>
                 <option value="category" <%= b.scope === 'category' ? 'selected' : '' %>>按分类</option>
                 <option value="account" <%= b.scope === 'account' ? 'selected' : '' %>>按账户</option>
               </select></div>
-              <div class="field" style="flex:2;min-width:140px"><label>分类</label><select name="category_id">
-                <option value="">—</option>
-                <% form.expenseCats.forEach(function(c){ if (c.parent_id) { %><option value="<%= c.id %>" <%= Number(b.category_id) === Number(c.id) ? 'selected' : '' %>><%= c.path %></option><% } }); %>
-              </select></div>
-              <div class="field" style="flex:2;min-width:140px"><label>账户</label><select name="account_id">
+              <div class="field f-cat" style="flex:2;min-width:140px"><label>分类</label>
+                <select name="category_id" class="f-cat-exp">
+                  <%- include('partials/budget-cat-options', { cats: form.expenseCats, selectedId: b.category_id }) %>
+                </select>
+                <select name="category_id" class="f-cat-inc hidden" disabled>
+                  <%- include('partials/budget-cat-options', { cats: form.incomeCats, selectedId: b.category_id }) %>
+                </select>
+              </div>
+              <div class="field f-acc" style="flex:2;min-width:140px"><label>账户</label><select name="account_id">
                 <option value="">—</option>
                 <% form.accounts.forEach(function(a){ %><option value="<%= a.id %>" <%= Number(b.account_id) === Number(a.id) ? 'selected' : '' %>><%= a.name %></option><% }); %>
+              </select></div>
+              <div class="field f-trig-field" style="flex:1;min-width:100px"><label>统计对象</label><select name="trigger_type" class="f-trig">
+                <option value="expense" <%= b.trigger_type !== 'income' ? 'selected' : '' %>>支出</option>
+                <option value="income" <%= b.trigger_type === 'income' ? 'selected' : '' %>>收入</option>
               </select></div>
               <div class="field" style="flex:1;min-width:100px"><label>状态</label><select name="is_active">
                 <option value="1" <%= b.is_active ? 'selected' : '' %>>启用</option>
@@ -133,15 +141,11 @@
         </div>
         <div class="field hidden" id="b-cat">
           <label>选择分类</label>
-          <select name="category_id">
-            <option value="">请选择…</option>
-            <% form.expenseCats.forEach(function(c){ if (!c.parent_id) { %>
-              <optgroup label="<%= c.name %>">
-                <% form.expenseCats.filter(function(x){ return Number(x.parent_id) === Number(c.id); }).forEach(function(x){ %>
-                  <option value="<%= x.id %>"><%= x.path %></option>
-                <% }); %>
-              </optgroup>
-            <% } }); %>
+          <select name="category_id" id="b-cat-exp">
+            <%- include('partials/budget-cat-options', { cats: form.expenseCats, selectedId: 0 }) %>
+          </select>
+          <select name="category_id" id="b-cat-inc" class="hidden" disabled>
+            <%- include('partials/budget-cat-options', { cats: form.incomeCats, selectedId: 0 }) %>
           </select>
         </div>
         <div class="field hidden" id="b-acc">
@@ -168,7 +172,7 @@
         </div>
         <div class="field">
           <label>统计对象</label>
-          <select name="trigger_type">
+          <select name="trigger_type" id="b-trig">
             <option value="expense">支出</option>
             <option value="income">收入</option>
           </select>
@@ -184,12 +188,54 @@
 
 <script>
 (function(){
+  /* 下拉显隐要落在 .hl-select 包装层（桌面增强后原生 select 本身常驻 display:none）；
+     同时禁用隐藏侧 select，避免两个 name=category_id 同时提交 */
+  function showSelect(sel, visible) {
+    if (!sel) return;
+    var wrap = sel.closest('.hl-select') || sel;
+    wrap.classList.toggle('hidden', !visible);
+    sel.disabled = !visible;
+    var btn = wrap.querySelector('.hl-select-trigger');
+    if (btn) btn.disabled = !visible;
+    if (visible && sel._hlRefresh) sel._hlRefresh();
+  }
+  function syncCatPair(expSel, incSel, trigSel) {
+    var income = trigSel && trigSel.value === 'income';
+    showSelect(expSel, !income);
+    showSelect(incSel, income);
+  }
+
+  /* 新建表单 */
   var sel = document.getElementById('b-scope');
-  function toggle(){
+  var trig = document.getElementById('b-trig');
+  var catExp = document.getElementById('b-cat-exp');
+  var catInc = document.getElementById('b-cat-inc');
+  function toggle() {
     document.getElementById('b-cat').classList.toggle('hidden', sel.value !== 'category');
     document.getElementById('b-acc').classList.toggle('hidden', sel.value !== 'account');
+    syncCatPair(catExp, catInc, trig);
   }
   if (sel) { sel.addEventListener('change', toggle); toggle(); }
+  if (trig) trig.addEventListener('change', function(){ syncCatPair(catExp, catInc, trig); });
+
+  /* 每条预算的内联编辑表单：范围/统计对象联动（与新建表单一致） */
+  document.querySelectorAll('.budget-edit-form').forEach(function(f) {
+    var sc = f.querySelector('select[name="scope"]');
+    var tr = f.querySelector('select.f-trig');
+    var ce = f.querySelector('select.f-cat-exp');
+    var ci = f.querySelector('select.f-cat-inc');
+    var catField = f.querySelector('.f-cat');
+    var accField = f.querySelector('.f-acc');
+    function sync() {
+      if (catField) catField.classList.toggle('hidden', !sc || sc.value !== 'category');
+      if (accField) accField.classList.toggle('hidden', !sc || sc.value !== 'account');
+      syncCatPair(ce, ci, tr);
+    }
+    if (sc) sc.addEventListener('change', sync);
+    if (tr) tr.addEventListener('change', sync);
+    sync();
+  });
+
   document.querySelectorAll('.budget-edit').forEach(function(a){
     a.addEventListener('click', function(e){
       e.preventDefault();

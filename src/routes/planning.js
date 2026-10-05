@@ -17,7 +17,7 @@ router.get('/budgets', auth.requireLogin, (req, res) => {
   if (!ledger) return res.redirect('/');
   const ledgerId = Number(ledger.id);
   const budgets = all(
-    `SELECT b.*, c.name AS category_name, c.icon AS category_icon, a.name AS account_name
+    `SELECT b.*, c.name AS category_name, c.icon AS category_icon, c.parent_id AS category_parent_id, a.name AS account_name
      FROM budgets b LEFT JOIN categories c ON c.id = b.category_id LEFT JOIN accounts a ON a.id = b.account_id
      WHERE b.ledger_id = ? ORDER BY b.is_active DESC, b.id`,
     ledgerId
@@ -25,12 +25,16 @@ router.get('/budgets', auth.requireLogin, (req, res) => {
     const range = sch.budgetPeriodRange(b, new Date());
     const used = sch.budgetUsedInRange(b, range.start, range.end);
     const amount = Number(b.amount_cents);
+    // 大分类（parent_id 为空）预算统计该分类及其全部子分类，标注出来避免误解口径
+    const catLabel = b.scope === 'category'
+      ? `分类 · ${b.category_name || '未指定'}${b.category_parent_id === null ? '（整个大分类）' : ''}`
+      : null;
     return {
       ...b, used, rangeLabel: range.label,
       ratio: amount > 0 ? (used / amount) * 100 : 0,
       remain: amount - used,
       dailyAllowance: Math.max(0, Math.round((amount - used) / Math.max(1, remainingDays(b, range)))),
-      scopeLabel: b.scope === 'overall' ? '总预算' : b.scope === 'category' ? `分类 · ${b.category_name || '未指定'}` : `账户 · ${b.account_name || '未指定'}`,
+      scopeLabel: b.scope === 'overall' ? '总预算' : catLabel || `账户 · ${b.account_name || '未指定'}`,
       periodLabel: { monthly: '每月', yearly: '每年', weekly: '每周', custom: '自定义' }[b.period] || '每月',
     };
   });
@@ -52,6 +56,18 @@ function remainingDays(b, range) {
   return Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
 }
 
+/** 分类须为系统分类或本账本自建（防跨账本/已停用 id 混入预算） */
+function validCategoryId(ledgerId, rawId) {
+  if (!rawId) return null;
+  const c = get('SELECT id FROM categories WHERE id = ? AND is_archived = 0 AND (ledger_id IS NULL OR ledger_id = ?)', Number(rawId), ledgerId);
+  return c ? Number(c.id) : null;
+}
+function validAccountId(ledgerId, rawId) {
+  if (!rawId) return null;
+  const a = get('SELECT id FROM accounts WHERE id = ? AND ledger_id = ? AND is_archived = 0', Number(rawId), ledgerId);
+  return a ? Number(a.id) : null;
+}
+
 router.post('/budgets', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
   const ledgerId = Number(res.locals.ledger.id);
   const name = String(req.body.name || '').trim();
@@ -63,8 +79,8 @@ router.post('/budgets', auth.requireLogin, auth.requireLedgerWrite, (req, res) =
       trigger_type, rollover, alert_pct, start_date, end_date, is_active, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)`,
     ledgerId, name.slice(0, 30), scope,
-    scope === 'category' && req.body.category_id ? Number(req.body.category_id) : null,
-    scope === 'account' && req.body.account_id ? Number(req.body.account_id) : null,
+    scope === 'category' ? validCategoryId(ledgerId, req.body.category_id) : null,
+    scope === 'account' ? validAccountId(ledgerId, req.body.account_id) : null,
     ['monthly', 'yearly', 'weekly', 'custom'].includes(req.body.period) ? req.body.period : 'monthly',
     amount, req.body.currency || 'CNY',
     req.body.trigger_type === 'income' ? 'income' : 'expense',
@@ -82,13 +98,14 @@ router.post('/budgets/:id', auth.requireLogin, auth.requireLedgerWrite, (req, re
   const id = Number(req.params.id);
   const b = get('SELECT * FROM budgets WHERE id = ? AND ledger_id = ?', id, ledgerId);
   if (!b) { res.flash('error', '预算不存在'); return res.redirect('/budgets'); }
+  const effScope = ['overall', 'category', 'account'].includes(req.body.scope) ? req.body.scope : b.scope;
   run(
     `UPDATE budgets SET name=?, scope=?, category_id=?, account_id=?, period=?, amount_cents=?, trigger_type=?,
       rollover=?, alert_pct=?, start_date=?, end_date=?, is_active=? WHERE id=?`,
     String(req.body.name || b.name).slice(0, 30),
-    ['overall', 'category', 'account'].includes(req.body.scope) ? req.body.scope : b.scope,
-    req.body.category_id ? Number(req.body.category_id) : null,
-    req.body.account_id ? Number(req.body.account_id) : null,
+    effScope,
+    effScope === 'category' ? validCategoryId(ledgerId, req.body.category_id) : null,
+    effScope === 'account' ? validAccountId(ledgerId, req.body.account_id) : null,
     ['monthly', 'yearly', 'weekly', 'custom'].includes(req.body.period) ? req.body.period : b.period,
     req.body.amount ? u.parseAmountToCents(req.body.amount) : Number(b.amount_cents),
     req.body.trigger_type === 'income' ? 'income' : 'expense',
