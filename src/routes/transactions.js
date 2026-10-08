@@ -48,6 +48,14 @@ function safeBack(back) {
 
 /* ---------------------------------- 列表 ---------------------------------- */
 
+/* 单笔详情（列表行点击弹窗用）：字段与列表同源，另带附件清单 */
+router.get('/:id/json', auth.requireLogin, (req, res) => {
+  const ledgerId = Number(res.locals.ledger.id);
+  const t = txn.getTransaction(Number(req.params.id), ledgerId);
+  if (!t) return res.status(404).json({ ok: false, error: '记录不存在' });
+  res.json({ ok: true, txn: t, attachments: att.listByTxn(t.id) });
+});
+
 router.get('/', auth.requireLogin, (req, res) => {
   const ledger = res.locals.ledger;
   if (!ledger) return res.redirect('/');

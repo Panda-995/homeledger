@@ -319,6 +319,23 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   const bad = await req('POST', '/subscriptions', { form: { _csrf: csrfOf(r.text), name: '', amount: '10' } });
   check('缺名称时拒绝创建', bad.status === 302, `HTTP ${bad.status}`);
 
+  /* 唯一锚点 = 下次扣费日：扣费日从该日期推导（日历轮询模型） */
+  r = await req('GET', '/subscriptions');
+  await req('POST', '/subscriptions', { form: {
+    _csrf: csrfOf(r.text), name: '锚点月付', icon: '🧾', amount: '30.00',
+    cycle: 'monthly', next_charge_at: '2026-11-15', status: 'active', auto_renew: '1',
+  } });
+  r = await req('GET', '/subscriptions');
+  check('月付以下次扣费日为锚（11-15 存储且扣费日=15）', r.text.includes('锚点月付') && r.text.includes('2026-11-15'), '');
+
+  r = await req('GET', '/subscriptions');
+  await req('POST', '/subscriptions', { form: {
+    _csrf: csrfOf(r.text), name: '锚点年付', icon: '🧾', amount: '100.00',
+    cycle: 'yearly', next_charge_at: '2027-03-15', status: 'active', auto_renew: '1',
+  } });
+  r = await req('GET', '/subscriptions');
+  check('年付以下次扣费日为锚（2027-03-15）', r.text.includes('锚点年付') && r.text.includes('2027-03-15'), '');
+
   /* 立即扣费 */
   r = await req('GET', '/subscriptions');
   const charge = await req('POST', `/subscriptions/${idAdobe}/charge`, { form: { _csrf: csrfOf(r.text) } });

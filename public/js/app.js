@@ -837,16 +837,105 @@
   function initLightbox() {
     const imgs = $$('[data-zoom]');
     if (!imgs.length) return;
-    imgs.forEach((img) => img.addEventListener('click', () => {
-      const mask = document.createElement('div');
-      mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;display:grid;place-items:center;cursor:zoom-out;padding:20px';
-      const big = document.createElement('img');
-      big.src = img.dataset.zoom || img.src;
-      big.style.cssText = 'max-width:96vw;max-height:92vh;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)';
-      mask.appendChild(big);
-      mask.addEventListener('click', () => mask.remove());
-      document.body.appendChild(mask);
-    }));
+    imgs.forEach((img) => img.addEventListener('click', () => openZoom(img.dataset.zoom || img.src)));
+  }
+
+  /** 大图查看（列表附件与详情弹窗共用） */
+  function openZoom(src) {
+    const mask = document.createElement('div');
+    mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:300;display:grid;place-items:center;cursor:zoom-out;padding:20px';
+    const big = document.createElement('img');
+    big.src = src;
+    big.style.cssText = 'max-width:96vw;max-height:92vh;border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.5)';
+    mask.appendChild(big);
+    mask.addEventListener('click', () => mask.remove());
+    document.body.appendChild(mask);
+  }
+
+  /* ============================ 交易详情弹窗（点列表行） ============================ */
+  const TXN_SOURCE_LABEL = { manual: '手动', ai_screenshot: 'AI 截图', ai_text: 'AI 文本', import: '导入', recurring: '周期账单', subscription: '订阅' };
+  const fmtCents = (c) => (Number(c) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function showTxnDetail(id) {
+    fetch('/transactions/' + id + '/json', { headers: { Accept: 'application/json' } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.ok) return toast(data.error || '加载失败', 'error');
+        const t = data.txn;
+        const rows = [];
+        const kv = (k, v) => rows.push('<div class="kv"><span class="k">' + k + '</span><span class="v">' + v + '</span></div>');
+        kv('日期', esc(t.txn_date) + ' · ' + esc(t.type_label));
+        if (t.type !== 'transfer') kv('分类', esc(t.category_path || '—'));
+        kv('账户', (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell')
+          ? esc((t.account_name || '—') + ' → ' + (t.to_account_name || '—'))
+          : esc(t.account_name || '未指定账户'));
+        if (t.member_name) kv('成员', esc(t.member_name));
+        if (t.merchant) kv('商家', esc(t.merchant));
+        if (t.note) kv('备注', esc(t.note));
+        if (t.tag_names) kv('标签', t.tag_names.split(/\s+/).filter(Boolean).map((s) => '<span class="tag-pill">' + esc(s) + '</span>').join(' '));
+        if (t.currency !== 'CNY') kv('原币金额', fmtCents(t.amount_cents) + ' ' + esc(t.currency) + ' × ' + (Number(t.rate) || 1) + ' ≈ ' + fmtCents(t.amount_base_cents) + ' CNY');
+        if (t.is_reimbursable) kv('报销', t.reimbursed_at ? '已报销（' + esc(t.reimbursed_at) + '）' : '待报销');
+        kv('状态', t.status === 'pending' ? '待确认' : '已确认');
+        kv('来源', TXN_SOURCE_LABEL[t.source] || esc(t.source || '—'));
+        kv('创建时间', esc(String(t.created_at || '').replace('T', ' ').slice(0, 16)));
+
+        const signCls = t.type === 'adjust' ? 'neutral' : (t.is_income ? 'income' : (t.is_expense ? 'expense' : 'neutral'));
+        const sign = t.type === 'adjust' ? '' : (t.is_income ? '+' : (t.is_expense ? '−' : ''));
+        const atts = (data.attachments || []).map((a) =>
+          '<figure><img data-zoom src="' + a.url + '" alt="' + esc(a.file_name) + '" loading="lazy"></figure>'
+        ).join('');
+
+        // 写权限：与列表行的操作按钮同源（只读成员行内没有编辑/删除钮）
+        const canWrite = !!document.querySelector('[data-del-txn="' + t.id + '"]');
+        const mask = document.createElement('div');
+        mask.className = 'modal-mask';
+        mask.innerHTML =
+          '<div class="modal txn-detail" role="dialog" aria-modal="true">' +
+            '<div class="modal-title">' + (t.category_icon || t.type_icon) + ' ' + esc(t.type === 'transfer' ? '转账' : (t.category_name || t.type_label)) + '</div>' +
+            '<div class="txn-detail-amt amount ' + signCls + '">' + sign + fmtCents(t.amount_cents) + (t.currency !== 'CNY' ? ' <span class="tiny muted">' + esc(t.currency) + '</span>' : '') + '</div>' +
+            '<div class="modal-body">' + rows.join('') +
+              (atts ? '<div class="txn-detail-att tiny muted">附件（点击放大）</div><div class="gallery txn-detail-gallery">' + atts + '</div>' : '') +
+            '</div>' +
+            '<div class="modal-actions">' +
+              '<button type="button" class="btn btn-ghost" data-act="close">关闭</button>' +
+              (canWrite ? '<button type="button" class="btn btn-ghost" style="color:var(--expense)" data-act="del">删除</button>' : '') +
+              (canWrite ? '<a class="btn btn-primary" href="/transactions/' + t.id + '/edit">编辑</a>' : '') +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(mask);
+        const close = () => mask.remove();
+        mask.addEventListener('click', async (e) => {
+          if (e.target === mask) return close();
+          const img = e.target.closest('[data-zoom]');
+          if (img) return openZoom(img.currentSrc || img.src);
+          const act = e.target.closest('[data-act]');
+          if (!act) return;
+          if (act.dataset.act === 'close') return close();
+          if (act.dataset.act === 'del') {
+            if (!(await hlConfirm('删除这笔记录？', { danger: true, okText: '删除' }))) return;
+            const res = await postJson('/transactions/' + t.id + '/delete', { _json: '1' });
+            if (res.ok) {
+              const row = document.querySelector('.txn[data-txn-id="' + t.id + '"]');
+              if (row) row.remove();
+              close();
+              toast('已删除', 'success');
+            } else toast('删除失败', 'error');
+          }
+        });
+        document.addEventListener('keydown', function onKey(e) {
+          if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); }
+        });
+      })
+      .catch(() => toast('加载失败', 'error'));
+  }
+
+  function initTxnDetail() {
+    // 委托：任何页面（明细/总览/搜索/账户）的 .txn 行点击都弹详情；行内链接与按钮不受影响
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('a, button, input, select, textarea, label')) return;
+      const row = e.target.closest('.txn[data-txn-id]');
+      if (row) showTxnDetail(row.dataset.txnId);
+    });
   }
 
   /* ============================ 列表页快捷操作 ============================ */
@@ -1250,6 +1339,7 @@
     initConfirm();
     initLightbox();
     initListActions();
+    initTxnDetail();
     initNumberInputs();
     initDatePickers();
     initCurrencySymbol();

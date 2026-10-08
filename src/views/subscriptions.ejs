@@ -205,23 +205,11 @@
               <% }); %>
             </select>
           </div>
-          <div class="field" style="flex:0 0 84px" id="f-cycle-n">
-            <label>每几期</label>
-            <input type="number" name="cycle_n" min="1" max="12" value="<%= val('cycle_n', 1) %>">
-          </div>
-          <div class="field" style="flex:0 0 84px" id="f-anchor-day">
-            <label>扣费日</label>
-            <input type="number" name="anchor_day" min="1" max="31" value="<%= val('anchor_day', Number(today.slice(8, 10))) %>">
-          </div>
-          <div class="field" style="flex:0 0 92px" id="f-anchor-month">
-            <label>年付月份</label>
-            <input type="number" name="anchor_month" min="1" max="12" value="<%= val('anchor_month', '') %>" placeholder="选填">
-          </div>
         </div>
 
         <div class="row" style="gap:8px">
           <div class="field" style="flex:1" id="f-next">
-            <label>下次扣费日</label>
+            <label id="f-next-label">下次扣费日</label>
             <input type="date" name="next_charge_at" value="<%= val('next_charge_at', today) %>">
           </div>
           <div class="field" style="flex:0 0 110px">
@@ -303,17 +291,14 @@
     });
   });
 
-  // 固定到期日 / 不周期（仅记录）：周期相关字段收起；固定到期日保留下方日期框（标签换成"到期日"）
+  // 只有两个概念：周期 + 下次扣费日。之后按日历轮询（每月 +1 月、每季 +3 月……月末自动收敛），
+  // 不再有独立的"扣费日"锚点；固定到期日只看这一个日期；不周期没有任何日期
   var cycSel = document.getElementById('sub-cycle');
-  var nextLabel = document.querySelector('#f-next label');
+  var nextLabel = document.getElementById('f-next-label');
   function cycleToggle() {
-    var val = cycSel ? cycSel.value : 'monthly';
-    var none = val === 'none';
-    var fixed = val === 'fixed';
-    ['f-cycle-n', 'f-anchor-day', 'f-anchor-month'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.classList.toggle('hidden', none || fixed);
-    });
+    var v = cycSel ? cycSel.value : 'monthly';
+    var none = v === 'none';
+    var fixed = v === 'fixed';
     var nextEl = document.getElementById('f-next');
     if (nextEl) nextEl.classList.toggle('hidden', none);
     if (nextLabel) nextLabel.textContent = fixed ? '到期日' : '下次扣费日';

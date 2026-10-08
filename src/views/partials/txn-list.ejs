@@ -22,7 +22,7 @@
         </span>
       </div>
       <% g.items.forEach(function(t){ %>
-        <div class="txn <%= t.status === 'pending' ? 'pending' : '' %>">
+        <div class="txn <%= t.status === 'pending' ? 'pending' : '' %>" data-txn-id="<%= t.id %>" title="点击查看详情">
           <% if (showCheckbox) { %>
             <input type="checkbox" class="bulk-item" name="ids" value="<%= t.id %>" form="bulk-form">
           <% } %>
@@ -36,8 +36,9 @@
                 <span><%= t.type === 'transfer' ? '转账' : (t.category_name || t.type_label) %></span>
               <% } %>
               <% if (t.category_parent && t.type !== 'transfer') { %><span class="tiny muted"><%= t.category_parent %></span><% } %>
-              <% if (t.merchant) { %><span class="note"><%= t.merchant %></span>
-              <% } else if (t.note) { %><span class="note"><%= t.note %></span><% } %>
+              <%# 商家与备注同时直接可见（此前二选一显示） %>
+              <% if (t.merchant) { %><span class="txn-merchant"><%= t.merchant %></span><% } %>
+              <% if (t.note) { %><span class="note"><%= t.note %></span><% } %>
             </div>
             <div class="txn-sub">
               <% if (t.type === 'transfer' || t.type === 'invest_buy' || t.type === 'invest_sell') { %>

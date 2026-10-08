@@ -512,6 +512,10 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 .txn-main { flex: 1; min-width: 0; }
 .txn-title { font-size: 14px; font-weight: 550; display: flex; align-items: center; gap: 6px; }
 .txn-title .note { color: var(--muted); font-weight: 400; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 商家名与备注并列直显：商家稍重、备注灰 */
+.txn-merchant { color: var(--text-2); font-weight: 500; font-size: 12.5px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+/* 行可点击看详情 */
+.txn { cursor: pointer; }
 .txn-sub { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
 .txn-amt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; font-size: 15px; white-space: nowrap; }
 .txn-act { opacity: 0; transition: opacity .15s; display: flex; gap: 4px; }
@@ -728,6 +732,15 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 }
 .modal-title { font-size: 15.5px; font-weight: 650; display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
 .modal-title .icon { color: var(--warn); }
+
+/* 交易详情弹窗：沿用确认弹窗骨架（同遮罩/动画/移动端底部弹层），略宽放 kv 与附件 */
+.modal.txn-detail { max-width: 440px; }
+.txn-detail-amt { font-size: 24px; font-weight: 700; margin: 2px 0 10px; font-variant-numeric: tabular-nums; }
+.txn-detail .kv:last-of-type { border-bottom: 0; }
+.txn-detail-att { margin: 12px 0 8px; }
+.txn-detail-gallery { gap: 8px; }
+.txn-detail-gallery figure { border-radius: 9px; }
+.txn-detail-gallery img { height: 92px; cursor: zoom-in; }
 .modal.danger .modal-title .icon { color: var(--expense); }
 .modal-body { font-size: 13.5px; color: var(--text-2); line-height: 1.65; word-break: break-word; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
