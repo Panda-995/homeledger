@@ -139,7 +139,7 @@ router.get('/recurring', auth.requireLogin, (req, res) => {
   const ledgerId = Number(ledger.id);
   const rules = all(
     `SELECT r.*, (SELECT COUNT(*) FROM transactions t WHERE t.ledger_id = r.ledger_id AND t.source = 'recurring'
-       AND t.note LIKE '%' || r.name || '%') AS posted
+       AND t.deleted_at IS NULL AND t.note LIKE '%' || r.name || '%') AS posted
      FROM recurring_rules r WHERE r.ledger_id = ? ORDER BY r.is_active DESC, r.next_run_at`,
     ledgerId
   ).map((r) => {

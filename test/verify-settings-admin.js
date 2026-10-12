@@ -135,6 +135,30 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   const vRef = (r.text.match(/app\.js\?v=([^"]+)/) || [])[1] || '';
   check('JS 引用带缓存戳（版本-mtime）', /-\w+$/.test(vRef), `v=${vRef}`);
 
+  /* --- 账户/分类删除：软删除记录不应阻止删除（历史 bug：计数漏 deleted_at 过滤） --- */
+  r = await req('GET', '/accounts');
+  const csrfAcc = csrfOf(r.text);
+  // 建临时账户并记一笔
+  await req('POST', '/accounts', { cookie, form: { _csrf: csrfAcc, name: '临时删除用', type: 'cash', icon: '🧪', currency: 'CNY', include_in_net: '1' } });
+  r = await req('GET', '/accounts');
+  const tmpAccId = (r.text.match(/\/accounts\/(\d+)"[^>]*>[\s\S]{0,80}?临时删除用/) || [])[1]
+    || ([...r.text.matchAll(/data-id="(\d+)"/g)].map(m => m[1]).pop());
+  check('临时账户已创建', !!tmpAccId, `id=${tmpAccId}`);
+  const csrfTx = csrfOf(r.text);
+  await req('POST', '/transactions', { cookie, form: { _csrf: csrfTx, type: 'expense', amount: '3.00', currency: 'CNY', account_id: tmpAccId, txn_date: new Date().toISOString().slice(0, 10), note: '删除口径回归', status: 'cleared' } });
+  // 有记录时应拒绝
+  r = await req('POST', `/accounts/${tmpAccId}/delete`, { cookie, form: { _csrf: csrfOf((await req('GET', '/accounts', { cookie })).text) } });
+  r = await req('GET', '/accounts', { cookie });
+  check('有记录时拒绝删除', r.text.includes('无法删除'), '');
+  // 软删除该笔后应可删除（流水 id 要去交易列表页取）
+  const rTxPage = await req('GET', '/transactions', { cookie });
+  const txId = (rTxPage.text.match(/data-txn-id="(\d+)"/) || [])[1];
+  check('取到流水 id', !!txId, String(txId));
+  await req('POST', `/transactions/${txId}/delete`, { cookie, form: { _csrf: csrfOf(rTxPage.text), _json: '1' } });
+  r = await req('POST', `/accounts/${tmpAccId}/delete`, { cookie, form: { _csrf: csrfOf((await req('GET', '/accounts', { cookie })).text) } });
+  r = await req('GET', '/accounts', { cookie });
+  check('记录软删后账户可删除', !r.text.includes('临时删除用'), '');
+
   console.log(`\n=== 结果：${pass} 通过 / ${fail} 失败 ===`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('FATAL', e); process.exit(1); });

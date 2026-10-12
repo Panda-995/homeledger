@@ -113,7 +113,9 @@ router.post('/accounts/:id/archive', auth.requireLogin, auth.requireLedgerWrite,
 router.post('/accounts/:id/delete', auth.requireLogin, auth.requireLedgerWrite, (req, res) => {
   const ledgerId = Number(res.locals.ledger.id);
   const id = Number(req.params.id);
-  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND (account_id = ? OR to_account_id = ?)', ledgerId, id, id)?.c || 0);
+  // 只统计未删除的交易（与列表口径一致）：软删除的记录用户已看不见，
+  // 若一并计数会出现"提示有记录、点进去却查无此账"的矛盾
+  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND (account_id = ? OR to_account_id = ?)', ledgerId, id, id)?.c || 0);
   if (used > 0) {
     res.flash('error', `该账户下有 ${used} 笔记录，无法删除。可改为「停用」。`);
     return res.redirect('/accounts');
@@ -233,7 +235,8 @@ router.post('/categories/:id/delete', auth.requireLogin, auth.requireLedgerWrite
     res.flash('error', '系统内置分类不可删除');
     return res.redirect('/categories');
   }
-  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE category_id = ?', id)?.c || 0);
+  // 同账户删除：只统计未删除的交易（软删除的记录用户已看不见，不应阻止删除）
+  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND category_id = ?', ledgerId, id)?.c || 0);
   if (used > 0) {
     run('UPDATE categories SET is_archived = 1 WHERE id = ?', id);
     res.flash('success', '该分类下已有记录，已改为「归档」不再出现在选择列表');

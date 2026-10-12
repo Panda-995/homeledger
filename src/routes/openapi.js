@@ -767,7 +767,8 @@ router.post('/accounts/:id/delete', requireWrite, (req, res) => {
   const { ledgerId } = req.openAuth;
   const acc = findAccount(req, res);
   if (!acc) return;
-  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND (account_id = ? OR to_account_id = ?)', ledgerId, acc.id, acc.id)?.c || 0);
+  // 只统计未删除的交易（与 Web 端口径一致，软删除的不阻止删除）
+  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND (account_id = ? OR to_account_id = ?)', ledgerId, acc.id, acc.id)?.c || 0);
   if (used > 0) return bad(res, 400, `该账户下有 ${used} 笔记录，无法删除。可改为「停用」。`);
   run('DELETE FROM accounts WHERE id = ? AND ledger_id = ?', acc.id, ledgerId);
   auth.audit(req, 'api.account.delete', { ledgerId, entity: 'account', entityId: acc.id, detail: acc.name });
@@ -844,7 +845,8 @@ router.post('/categories/:id/delete', requireWrite, (req, res) => {
   const c = findCategory(req, res);
   if (!c) return;
   if (c.is_system || c.ledger_id === null) return bad(res, 403, '系统内置分类不可删除');
-  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE category_id = ?', c.id)?.c || 0);
+  // 只统计未删除的交易（与 Web 端口径一致）
+  const used = Number(get('SELECT COUNT(*) AS c FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND category_id = ?', ledgerId, c.id)?.c || 0);
   if (used > 0) {
     run('UPDATE categories SET is_archived = 1 WHERE id = ?', c.id);
     auth.audit(req, 'api.category.archive', { ledgerId, entity: 'category', entityId: c.id, detail: `有 ${used} 笔流水，改为归档` });
