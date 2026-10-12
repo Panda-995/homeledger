@@ -16,13 +16,13 @@ function check(name, ok, detail = '') {
   if (ok) { pass++; console.log(`  PASS  ${name}${detail ? '  — ' + detail : ''}`); }
   else { fail++; console.log(`  FAIL  ${name}  — ${detail}`); }
 }
-async function req(method, p, { form, headers = {} } = {}) {
+async function req(method, p, { form, raw, headers = {} } = {}) {
   const h = { ...headers };
   if (cookie) h.cookie = cookie;
-  if (form) h['content-type'] = 'application/x-www-form-urlencoded';
+  if (form || raw) h['content-type'] = 'application/x-www-form-urlencoded';
   const res = await fetch(BASE + p, {
     method, headers: h,
-    body: form ? new URLSearchParams(form).toString() : undefined,
+    body: raw ? raw : (form ? new URLSearchParams(form).toString() : undefined),
     redirect: 'manual',
   });
   const sc = res.headers.getSetCookie?.() || [];
@@ -102,6 +102,23 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   // 越权：不存在/他人账本 id
   r = await req('GET', '/transactions/999999/json');
   check('不存在的记录 404', r.status === 404, `HTTP ${r.status}`);
+
+  // 批量删除：POST /bulk 不得被 POST /:id 参数路由捕获（历史 bug：id=NaN → 记录不存在）
+  const bulkIds = [];
+  for (let i = 1; i <= 2; i++) {
+    const c = await req('POST', '/transactions', { form: {
+      _csrf: csrf, type: 'expense', amount: '1.00', currency: 'CNY', account_id: accId,
+      txn_date: d, note: '批量回归-' + i, status: 'cleared',
+    }, headers: { accept: 'application/json' } });
+    if (c.json && c.json.ok) bulkIds.push(c.json.id);
+  }
+  // URLSearchParams 会把数组串成 "ids=1,2" 单值，需逐个 append 成重复参数（与浏览器表单一致）
+  const bulkForm = new URLSearchParams({ _csrf: csrf, action: 'delete' });
+  bulkIds.forEach((id) => bulkForm.append('ids', id));
+  r = await req('POST', '/transactions/bulk', { raw: bulkForm.toString() });
+  check('批量删除返回跳转（未被 /:id 捕获）', r.status === 302, `HTTP ${r.status}`);
+  r = await req('GET', '/transactions');
+  check('批量删除后记录消失', !r.text.includes('批量回归-1') && !r.text.includes('批量回归-2'), '');
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
   process.exit(fail ? 1 : 0);
