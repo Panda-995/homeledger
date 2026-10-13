@@ -39,12 +39,9 @@
     });
   }
 
-  /* ------------------------ 自定义下拉框（桌面端） ------------------------ */
+  /* ------------------------ 自定义下拉框（全端统一） ------------------------ */
   /* 原生 select 保留在 DOM（隐藏）负责取值与提交；触发态由 .hl-select 渲染。
-     触屏设备保持原生选择器（系统滚轮更好用），加 data-native 可强制跳过增强。 */
-  function isTouch() {
-    return window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-  }
+     桌面与触屏统一使用自定义样式（交互一致）；加 data-native 可强制跳过增强。 */
 
   function optionLabel(opt) {
     return (opt ? opt.textContent : '').replace(/\s+/g, ' ').trim();
@@ -225,7 +222,6 @@
   }
 
   function enhanceSelects(root) {
-    if (isTouch()) return;
     $$('select:not([data-native])', root || document).forEach(enhanceSelect);
   }
   window.hlEnhanceSelects = enhanceSelects;
@@ -632,20 +628,28 @@
       }
 
       html += '<div class="card">';
-      html += '<div class="card-head"><h2>将导入的明细</h2></div>';
-      html += '<div class="scroll-x"><table class="table responsive"><thead><tr><th>日期</th><th>类型</th><th class="num">金额</th><th>商家/说明</th><th>建议分类</th><th>账户</th></tr></thead><tbody>';
-      res.sample.slice(0, 60).forEach((r) => {
+      html += '<div class="card-head"><h2>将导入的明细</h2><span class="muted small">记账本列可把某些记录改记到其他账本（如家庭共用支出记到家庭账本）</span></div>';
+      html += '<div class="scroll-x"><table class="table responsive"><thead><tr><th>日期</th><th>类型</th><th class="num">金额</th><th>商家/说明</th><th>建议分类</th><th>账户</th><th>记账本</th></tr></thead><tbody>';
+      const ledgerOpts = (selected) => (res.myLedgers || []).map((l) =>
+        '<option value="' + l.id + '"' + (Number(selected) === l.id ? ' selected' : '') + '>' + esc(l.icon + ' ' + l.name) + '</option>'
+      ).join('');
+      const currentLedgerId = (res.myLedgers || []).find((l) => l.isCurrent)?.id;
+      res.sample.forEach((r) => {
         html += '<tr><td class="nowrap">' + esc(r.txn_date) + '</td>' +
           '<td><span class="chip ' + (r.type === 'income' ? 'income' : r.type === 'transfer' ? '' : 'expense') + '">' + esc(r.type_label) + '</span></td>' +
           '<td class="num amount ' + (r.type === 'income' ? 'income' : 'expense') + '">' + money(r.amount_cents) + '</td>' +
           '<td>' + esc(r.merchant || r.note || '—') + '</td>' +
           '<td class="small muted">' + esc(r.guess_category || '—') + '</td>' +
-          '<td class="small muted">' + esc(r.guess_account || '—') + '</td></tr>';
+          '<td class="small muted">' + esc(r.guess_account || '—') + '</td>' +
+          '<td>' + (res.myLedgers && res.myLedgers.length > 1
+            ? '<select class="imp-ledger" data-idx="' + r.idx + '">' + ledgerOpts(currentLedgerId) + '</select>'
+            : '<span class="tiny muted">当前账本</span>') + '</td></tr>';
       });
       html += '</tbody></table></div>';
       if (res.count > 60) html += '<p class="small muted mt8">仅预览前 60 条，导入时会包含全部 ' + res.count + ' 条。</p>';
       html += '</div>';
       preview.innerHTML = html;
+      if (window.hlEnhanceSelects) window.hlEnhanceSelects(preview);
 
       const neutralBox = $('#imp-include-neutral');
       if (neutralBox) {
@@ -658,10 +662,17 @@
       $('#imp-commit').addEventListener('click', async () => {
         const btn = $('#imp-commit');
         btn.disabled = true; btn.textContent = '导入中…';
+        // 收集逐条改记账本（index → ledgerId），只提交改过的
+        const ledgerOverrides = {};
+        $$('.imp-ledger').forEach((sel) => {
+          const def = sel.querySelector('option[selected]') || sel.options[0];
+          if (sel.value && (!def || Number(sel.value) !== Number(def.value))) ledgerOverrides[sel.dataset.idx] = Number(sel.value);
+        });
         const r = await postJson('/api/import/commit', {
           token: state.token,
           auto_create_account: $('#imp-auto-acc').checked,
           include_neutral: !!($('#imp-include-neutral') && $('#imp-include-neutral').checked),
+          ledger_overrides: ledgerOverrides,
         });
         if (r.ok) {
           toast('成功导入 ' + r.imported + ' 条，跳过重复 ' + r.skipped + ' 条', 'success');
@@ -1012,13 +1023,11 @@
     });
   }
 
-  /* ==================== 自定义日期选择器（桌面端，风格对齐 hl-select） ==================== */
-  /* 触屏设备保留原生日期滚轮（移动端最佳交互），桌面端替换为与项目一致的日历弹层 */
+  /* ==================== 自定义日期选择器（全端统一，风格对齐 hl-select） ==================== */
   const DATE_DOW = ['一', '二', '三', '四', '五', '六', '日'];
   const pad2 = (n) => String(n).padStart(2, '0');
 
   function initDatePickers() {
-    if (isTouch()) return;
     // 注意是 $$（全部）：此前误写成 $（单个），导致每页只有第一个日期输入被增强
     $$('input[type="date"], input[type="month"]').forEach(initDatePicker);
   }

@@ -11,18 +11,20 @@
  */
 const BASE = 'http://127.0.0.1:8099';
 let cookie = '';
+let currentCsrf = '';
 let pass = 0, fail = 0;
 function check(name, ok, detail = '') {
   if (ok) { pass++; console.log(`  PASS  ${name}${detail ? '  — ' + detail : ''}`); }
   else { fail++; console.log(`  FAIL  ${name}  — ${detail}`); }
 }
-async function req(method, p, { form, raw, headers = {} } = {}) {
+async function req(method, p, { form, raw, json, headers = {} } = {}) {
   const h = { ...headers };
   if (cookie) h.cookie = cookie;
   if (form || raw) h['content-type'] = 'application/x-www-form-urlencoded';
+  if (json) { h['content-type'] = 'application/json'; h['x-csrf-token'] = h['x-csrf-token'] || currentCsrf; }
   const res = await fetch(BASE + p, {
     method, headers: h,
-    body: raw ? raw : (form ? new URLSearchParams(form).toString() : undefined),
+    body: raw ? raw : (json ? JSON.stringify(json) : (form ? new URLSearchParams(form).toString() : undefined)),
     redirect: 'manual',
   });
   const sc = res.headers.getSetCookie?.() || [];
@@ -51,7 +53,7 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   const catId = (r.text.match(/name="category_id"[\s\S]*?<option value="(\d+)"/) || [])[1];
   const accId = (r.text.match(/name="account_id"[\s\S]*?<option value="(\d+)"/) || [])[1];
   check('解析到分类/账户', !!catId && !!accId, `cat=${catId} acc=${accId}`);
-  const csrf = csrfOf(r.text);
+  const csrf = csrfOf(r.text); currentCsrf = csrf;
 
   // 新库默认只有一个账户：建第二个账户供转账测试
   await req('POST', '/accounts', { form: { _csrf: csrf, name: '支付宝', type: 'virtual', icon: '📱', currency: 'CNY', include_in_net: '1' } });
@@ -119,6 +121,26 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   check('批量删除返回跳转（未被 /:id 捕获）', r.status === 302, `HTTP ${r.status}`);
   r = await req('GET', '/transactions');
   check('批量删除后记录消失', !r.text.includes('批量回归-1') && !r.text.includes('批量回归-2'), '');
+
+  /* 导入逐条改记账本：preview 带 myLedgers/idx，commit 按 ledger_overrides 拆账本落库 */
+  const csv = '交易时间,交易分类,交易对方,商品说明,收/支,金额,收/付款方式,交易状态,交易订单号\n' +
+    `${d} 12:00:00,餐饮美食,拆本A,午饭,支出,30.00,余额,交易成功,TS1\n` +
+    `${d} 13:00:00,餐饮美食,拆本B,晚饭,支出,40.00,余额,交易成功,TS2\n`;
+  r = await req('POST', '/api/import/preview', { json: { dataUrl: 'data:text/csv;base64,' + Buffer.from(csv, 'utf8').toString('base64'), fileName: '拆本E2E.csv' } });
+  check('导入预览带可写账本列表', r.json && r.json.ok && Array.isArray(r.json.myLedgers) && r.json.myLedgers.length >= 1, `${r.json && r.json.myLedgers && r.json.myLedgers.length} 个`);
+  check('样本行带全局索引 idx', r.json && r.json.sample && r.json.sample[1] && r.json.sample[1].idx === 1, '');
+  // 越权账本（不存在的 id）应被忽略、记录仍进当前账本
+  const overrides = {}; overrides[r.json.sample[1].idx] = 999999;
+  r = await req('POST', '/api/import/commit', { json: { token: r.json.token, ledger_overrides: overrides, include_neutral: false } });
+  check('拆账本导入完成（越权账本回落当前账本）', r.json && r.json.ok && r.json.imported === 2 && Object.keys(r.json.ledgerSplit || {}).length === 1, JSON.stringify(r.json && r.json.ledgerSplit));
+  r = await req('GET', '/transactions?q=' + encodeURIComponent('拆本'));
+  check('两笔都落在当前账本', r.text.includes('拆本A') && r.text.includes('拆本B'), '');
+  // 清理
+  const pageTxn = await req('GET', '/transactions');
+  const delForm2 = new URLSearchParams({ _csrf: csrfOf(pageTxn.text), action: 'delete' });
+  const page2 = await req('GET', '/transactions?q=' + encodeURIComponent('拆本'));
+  (page2.text.match(/data-txn-id="(\d+)"/g) || []).forEach((m) => delForm2.append('ids', m.match(/(\d+)/)[1]));
+  await req('POST', '/transactions/bulk', { raw: delForm2.toString() });
 
   console.log(`\n结果：${pass} 通过 / ${fail} 失败\n`);
   process.exit(fail ? 1 : 0);

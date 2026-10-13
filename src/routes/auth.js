@@ -208,9 +208,23 @@ router.post('/join/:code', auth.requireLogin, (req, res) => {
     return res.redirect('/');
   }
 
+  // 加入前记住来源账本：加入后回到原来的账本继续记账，而不是被切到受邀账本
+  // （否则管理员/拥有者点了自己成员发来的邀请后，界面角色变成"成员"，看起来像被降级）
+  const prevLedgerId = Number(req.session.ledgerId || 0);
+
   require('../db').addLedgerMember(invite.ledger_id, req.session.userId, invite.role || 'member');
   run('UPDATE ledger_invites SET used_by = ?, used_at = ? WHERE id = ?', req.session.userId, nowStr(), invite.id);
-  req.session.ledgerId = Number(invite.ledger_id);
+  // 拥有者不会因补成员记录被邀请角色覆盖（异常恢复场景下回到 owner）
+  const owned = get('SELECT owner_id FROM ledgers WHERE id = ?', invite.ledger_id);
+  if (owned && Number(owned.owner_id) === Number(req.session.userId)) {
+    run("UPDATE ledger_members SET role = 'owner' WHERE ledger_id = ? AND user_id = ?", invite.ledger_id, req.session.userId);
+  }
+  // 回到加入前的账本（没有则留在新账本）
+  if (prevLedgerId && auth.membership(req.session.userId, prevLedgerId)) {
+    req.session.ledgerId = prevLedgerId;
+  } else {
+    req.session.ledgerId = Number(invite.ledger_id);
+  }
   auth.audit(req, 'ledger.join', { ledgerId: Number(invite.ledger_id), detail: `邀请码 ${code}` });
   for (const uid of auth.ledgerWriterIds(invite.ledger_id)) {
     if (Number(uid) === Number(req.session.userId)) continue;
@@ -220,7 +234,7 @@ router.post('/join/:code', auth.requireLogin, (req, res) => {
       link: '/members',
     });
   }
-  req.session.flash = { type: 'success', message: `已加入账本「${ledger.name}」` };
+  req.session.flash = { type: 'success', message: `已加入账本「${ledger.name}」，可随时在右上角切换账本` };
   res.redirect('/');
 });
 

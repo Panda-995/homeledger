@@ -516,8 +516,9 @@ router.post('/api/import/preview', auth.requireLogin, auth.requireLedgerWrite, (
       }
       return kind === 'income' ? '其他收入/其他收入' : '其他支出/其他';
     };
-    const sample = parsed.records.slice(0, 200).map((r) => ({
+    const sample = parsed.records.slice(0, 200).map((r, idx) => ({
       ...r,
+      idx,
       type_label: require('../db').TXN_TYPE_MAP[r.type]?.label || r.type,
       guess_category: guessCat(r),
       guess_account: r.account_hint || '—',
@@ -532,12 +533,18 @@ router.post('/api/import/preview', auth.requireLogin, auth.requireLedgerWrite, (
       if (!stat.maxDate || r.txn_date > stat.maxDate) stat.maxDate = r.txn_date;
     }
 
-    const neutralSample = (parsed.neutralRecords || []).slice(0, 20).map((r) => ({
+    const neutralSample = (parsed.neutralRecords || []).slice(0, 20).map((r, i) => ({
       ...r,
+      idx: parsed.records.length + i,
       type_label: require('../db').TXN_TYPE_MAP[r.type]?.label || r.type,
       guess_category: guessCat(r),
       guess_account: r.account_hint || '—',
     }));
+
+    // 逐条改记账本用：用户可写的账本列表（家庭账单拆记到家庭/个人账本）
+    const myLedgers = (res.locals.ledgers || [])
+      .filter((l) => auth.canWrite(l.role))
+      .map((l) => ({ id: Number(l.id), name: l.name, icon: l.icon, isCurrent: Number(l.id) === ledgerId }));
 
     res.json({
       ok: true, token,
@@ -549,7 +556,7 @@ router.post('/api/import/preview', auth.requireLogin, auth.requireLedgerWrite, (
       skipped: parsed.skipped || 0,
       neutralCount: (parsed.neutralRecords || []).length,
       neutralSample,
-      sample, stat,
+      sample, stat, myLedgers,
     });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
@@ -563,6 +570,17 @@ router.post('/api/import/commit', auth.requireLogin, auth.requireLedgerWrite, (r
     return res.status(400).json({ ok: false, error: '预览已过期，请重新上传文件' });
   }
   try {
+    // 逐条改记账本：只接受用户有写权限的账本，非法/无权限的索引忽略（回落当前账本）
+    const overridesRaw = req.body.ledger_overrides || {};
+    const ledgerOverrides = {};
+    for (const [k, v] of Object.entries(overridesRaw)) {
+      const idx = Number(k);
+      const target = Number(v);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= cached.records.length) continue;
+      if (!target || target === ledgerId) continue;
+      const m = auth.membership(req.session.userId, target);
+      if (m && auth.canWrite(m.role)) ledgerOverrides[idx] = target;
+    }
     const r = importer.importRecords({
       ledgerId, userId: req.session.userId,
       records: cached.records,
@@ -571,6 +589,7 @@ router.post('/api/import/commit', auth.requireLogin, auth.requireLedgerWrite, (r
       source: cached.source, fileName: cached.fileName,
       autoCreateAccount: req.body.auto_create_account !== false,
       defaultAccountId: req.body.default_account_id ? Number(req.body.default_account_id) : null,
+      ledgerOverrides,
     });
     previewCache.delete(String(req.body.token));
     auth.audit(req, 'import.commit', { ledgerId, detail: `${cached.fileName} 导入 ${r.imported} 笔` });

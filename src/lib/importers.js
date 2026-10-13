@@ -8,7 +8,7 @@
  */
 const zlib = require('node:zlib');
 const { all, get, run, tx, nowStr, todayStr, recalcBalances } = require('../db');
-const { parseAmountToCents, monthOf } = require('./util');
+const { parseAmountToCents } = require('./util');
 const { classifyByKeywords, guessAccountName, resolveCategoryId, resolveAccountId } = require('./ai');
 
 /* ------------------------------- xlsx（零依赖） ------------------------------- */
@@ -184,12 +184,15 @@ const SKIP_STATUS = /已关闭|交易关闭|已退款|全额退款|退款成功|
 /** 导出 CSV type_key 列的合法值 */
 const TXN_KEYS = new Set(['expense','income','transfer','lend','borrow','repay_receive','repay_pay','reimburse','refund','fee','interest','invest_buy','invest_sell','adjust']);
 
-function normalizeRow({ date, direction, amountText, merchant, desc, categoryText, accountText, status, orderNo }) {
+function normalizeRow({ date, direction, amountText, merchant, desc, categoryText, accountText, status, orderNo, typeKey }) {
   const amountCents = parseAmountToCents(amountText);
   const dir = String(direction || '').trim();
   let type = 'expense';
   let neutral = false;
-  if (/不计/.test(dir)) {
+  // type_key 精确类型优先（家账簿导出的 CSV 回导），收支方向仅作兜底
+  if (TXN_KEYS.has(typeKey)) {
+    type = typeKey;
+  } else if (/不计/.test(dir)) {
     // 转账 / 提现 / 充值 等「不计收支」记录：默认不导入（成对记录只导一半会破坏余额）
     type = 'transfer';
     neutral = true;
@@ -275,6 +278,8 @@ function parseBill(buffer) {
       accountText: iAccount >= 0 ? r[iAccount] : '',
       status,
       orderNo: iOrder >= 0 ? r[iOrder] : '',
+      // 家账簿自己导出的 CSV 带 type_key 精确类型列：回导时优先还原（借贷/报销等不会退化为支出）
+      typeKey: iTypeKey >= 0 ? r[iTypeKey] : '',
     });
     if (norm.skip || !norm.amount_cents) { skipped++; continue; }
     if (norm.neutral) neutralRecords.push(norm);
@@ -310,88 +315,105 @@ const NEUTRAL_FALLBACK_ACCOUNT = '外部往来账户';
  * 把解析结果写入数据库
  * @param {object} o
  * @param {boolean} [o.includeNeutral] 是否同时导入「不计收支」记录（提现 / 充值等）
- * @returns {{imported:number, skipped:number, failed:number, createdAccounts:string[], jobId:number}}
+ * @param {Object<number,number>} [o.ledgerOverrides] 记录索引 → 目标账本 id（调用方已校验写权限；
+ *   家庭账单导入时把水电暖等共用支出改记到家庭账本、个人消费留在个人账本）
+ * @returns {{imported:number, skipped:number, failed:number, createdAccounts:string[], jobId:number, ledgerSplit:Object}}
  */
 function importRecords({
   ledgerId, userId, records, neutralRecords = [], includeNeutral = false,
-  source, fileName, autoCreateAccount = true, defaultAccountId = null,
+  source, fileName, autoCreateAccount = true, defaultAccountId = null, ledgerOverrides = {},
 }) {
   const createdAccounts = [];
   let imported = 0, skipped = 0, failed = 0;
   const list = includeNeutral ? records.concat(neutralRecords) : records.slice();
-  const dupSet = new Set();
-  // 预载已有记录指纹，避免重复导入
-  for (const t of all(
-    'SELECT txn_date, amount_base_cents, merchant FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND source = ?',
-    ledgerId, 'import'
-  )) {
-    dupSet.add(`${t.txn_date}|${t.amount_base_cents}|${t.merchant || ''}`);
-  }
+  // 按目标账本分组：无覆盖的进当前账本，有覆盖的进指定账本
+  const buckets = new Map();
+  list.forEach((rec, i) => {
+    const target = Number(ledgerOverrides[i]) || Number(ledgerId);
+    if (!buckets.has(target)) buckets.set(target, []);
+    buckets.get(target).push(rec);
+  });
+  const importedPerLedger = {};
 
   tx(() => {
-    for (const rec of list) {
-      try {
-        const fp = `${rec.txn_date}|${rec.amount_cents}|${rec.merchant || ''}`;
-        if (dupSet.has(fp)) { skipped++; continue; }
+    for (const [lid, recs] of buckets) {
+      const dupSet = new Set();
+      // 预载该账本已有记录指纹，避免重复导入（分账本判重）
+      for (const t of all(
+        'SELECT txn_date, amount_base_cents, merchant FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL AND source = ?',
+        lid, 'import'
+      )) {
+        dupSet.add(`${t.txn_date}|${t.amount_base_cents}|${t.merchant || ''}`);
+      }
 
-        let categoryId = null;
-        let toAccountId = null;
-        const accountId = autoCreateAccount
-          ? ensureAccount(ledgerId, rec.account_hint, createdAccounts)
-          : resolveAccountId(ledgerId, rec.account_hint) || defaultAccountId;
+      for (const rec of recs) {
+        try {
+          const fp = `${rec.txn_date}|${rec.amount_cents}|${rec.merchant || ''}`;
+          if (dupSet.has(fp)) { skipped++; continue; }
 
-        if (rec.neutral) {
-          // 提现 / 充值：账户之间搬钱，不计入收支。对方账户优先从说明文字推断
-          const cpName = guessAccountName(rec.text) || NEUTRAL_FALLBACK_ACCOUNT;
-          toAccountId = autoCreateAccount
-            ? ensureAccount(ledgerId, cpName, createdAccounts) || ensureAccount(ledgerId, NEUTRAL_FALLBACK_ACCOUNT, createdAccounts)
-            : resolveAccountId(ledgerId, cpName) || null;
-        } else if (rec.type === 'transfer' || rec.type === 'invest_buy' || rec.type === 'invest_sell' || rec.type === 'lend' || rec.type === 'borrow') {
-          // 回导的双边类型（转账/借贷）：对方账户从说明文字推断；推不出就按 transfer 兜底（一方账户仍保留）
-          const cpName = guessAccountName(rec.text) || NEUTRAL_FALLBACK_ACCOUNT;
-          toAccountId = autoCreateAccount
-            ? ensureAccount(ledgerId, cpName, createdAccounts)
-            : resolveAccountId(ledgerId, cpName) || null;
-          if (!toAccountId) rec.type = 'transfer';
-        } else {
-          const kind = rec.type === 'income' ? 'income' : 'expense';
-          const kw = classifyByKeywords(rec.text);
-          if (rec.category_hint) categoryId = resolveCategoryId(ledgerId, rec.category_hint, kind);
-          if (!categoryId && kw) categoryId = resolveCategoryId(ledgerId, kw.category, kw.kind === 'income' ? 'income' : kind);
-          if (!categoryId) categoryId = resolveCategoryId(ledgerId, kind === 'income' ? '其他收入' : '其他支出', kind);
+          let categoryId = null;
+          let toAccountId = null;
+          const accountId = autoCreateAccount
+            ? ensureAccount(lid, rec.account_hint, createdAccounts)
+            : resolveAccountId(lid, rec.account_hint) || defaultAccountId;
+
+          if (rec.neutral) {
+            // 提现 / 充值：账户之间搬钱，不计入收支。对方账户优先从说明文字推断
+            const cpName = guessAccountName(rec.text) || NEUTRAL_FALLBACK_ACCOUNT;
+            toAccountId = autoCreateAccount
+              ? ensureAccount(lid, cpName, createdAccounts) || ensureAccount(lid, NEUTRAL_FALLBACK_ACCOUNT, createdAccounts)
+              : resolveAccountId(lid, cpName) || null;
+          } else if (rec.type === 'transfer' || rec.type === 'invest_buy' || rec.type === 'invest_sell' || rec.type === 'lend' || rec.type === 'borrow') {
+            // 回导的双边类型（转账/借贷）：对方账户从说明文字推断；推不出就按 transfer 兜底（一方账户仍保留）
+            const cpName = guessAccountName(rec.text) || NEUTRAL_FALLBACK_ACCOUNT;
+            toAccountId = autoCreateAccount
+              ? ensureAccount(lid, cpName, createdAccounts)
+              : resolveAccountId(lid, cpName) || null;
+            if (!toAccountId) rec.type = 'transfer';
+          } else {
+            const kind = rec.type === 'income' ? 'income' : 'expense';
+            const kw = classifyByKeywords(rec.text);
+            if (rec.category_hint) categoryId = resolveCategoryId(lid, rec.category_hint, kind);
+            if (!categoryId && kw) categoryId = resolveCategoryId(lid, kw.category, kw.kind === 'income' ? 'income' : kind);
+            if (!categoryId) categoryId = resolveCategoryId(lid, kind === 'income' ? '其他收入' : '其他支出', kind);
+          }
+          // 余额调整回导保留负金额（调减为带符号数），方向不能翻转；
+          // 但 expense/income 直接以负数入库会把方向写反（txnEffects 对 expense 取 -a），钳回正数
+          const signedAmount = rec.type === 'adjust' ? rec.amount_cents : Math.abs(rec.amount_cents);
+
+          run(
+            `INSERT INTO transactions
+             (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id, to_account_id, category_id,
+              user_id, txn_date, note, merchant, status, source, ai_json, created_at, updated_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            lid, rec.type, signedAmount, 'CNY', 1, signedAmount,
+            accountId, toAccountId, categoryId, userId, rec.txn_date, rec.note, rec.merchant,
+            'cleared', 'import', JSON.stringify({ source, order_no: rec.order_no, neutral: !!rec.neutral }),
+            nowStr(), nowStr()
+          );
+          dupSet.add(fp);
+          imported++;
+          importedPerLedger[lid] = (importedPerLedger[lid] || 0) + 1;
+        } catch {
+          failed++;
         }
-        // 余额调整回导保留负金额（调减为带符号数），方向不能翻转；
-        // 但 expense/income 直接以负数入库会把方向写反（txnEffects 对 expense 取 -a），钳回正数
-        const signedAmount = rec.type === 'adjust' ? rec.amount_cents : Math.abs(rec.amount_cents);
-
-        run(
-          `INSERT INTO transactions
-           (ledger_id, type, amount_cents, currency, rate, amount_base_cents, account_id, to_account_id, category_id,
-            user_id, txn_date, note, merchant, status, source, ai_json, created_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          ledgerId, rec.type, signedAmount, 'CNY', 1, signedAmount,
-          accountId, toAccountId, categoryId, userId, rec.txn_date, rec.note, rec.merchant,
-          'cleared', 'import', JSON.stringify({ source, order_no: rec.order_no, neutral: !!rec.neutral }),
-          nowStr(), nowStr()
-        );
-        dupSet.add(fp);
-        imported++;
-      } catch {
-        failed++;
       }
     }
   });
 
-  // 导入是直接写表，必须重算账户余额，否则余额与流水不一致
-  if (imported > 0) recalcBalances(ledgerId);
+  // 导入是直接写表，必须重算账户余额，否则余额与流水不一致（涉及到的每个账本都要）
+  for (const lid of Object.keys(importedPerLedger)) recalcBalances(Number(lid));
 
+  const otherLedgers = Object.entries(importedPerLedger).filter(([lid]) => Number(lid) !== Number(ledgerId));
   const job = run(
     `INSERT INTO import_jobs (ledger_id, user_id, source, file_name, total, imported, skipped, failed, status, message, created_at)
      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     ledgerId, userId, source, fileName, list.length, imported, skipped, failed, 'done',
-    createdAccounts.length ? `自动创建账户：${createdAccounts.join('、')}` : null, nowStr()
+    (createdAccounts.length ? `自动创建账户：${createdAccounts.join('、')}` : null)
+      || (otherLedgers.length ? `另有 ${otherLedgers.reduce((s, [, n]) => s + n, 0)} 笔记入其他账本` : null),
+    nowStr()
   );
-  return { imported, skipped, failed, createdAccounts, jobId: job.lastInsertRowid };
+  return { imported, skipped, failed, createdAccounts, jobId: job.lastInsertRowid, ledgerSplit: importedPerLedger };
 }
 
 /* --------------------------------- 导出 ---------------------------------- */
