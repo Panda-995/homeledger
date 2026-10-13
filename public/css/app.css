@@ -466,6 +466,19 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
   font-size: 11px; background: var(--card-2); border: 1px solid var(--border); color: var(--text-2);
 }
 
+/* 图表悬浮金额提示（跟随鼠标的项目风格气泡） */
+.chart-tip {
+  position: fixed; z-index: 400; pointer-events: none;
+  background: var(--text); color: var(--card);
+  font-size: 12px; font-weight: 550; font-variant-numeric: tabular-nums;
+  padding: 5px 10px; border-radius: 8px;
+  box-shadow: var(--shadow);
+  opacity: 0; transform: translateY(3px);
+  transition: opacity .12s ease, transform .12s ease;
+  max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.chart-tip.show { opacity: 1; transform: none; }
+
 /* 统计卡 */
 .stat {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -976,6 +989,15 @@ a.chip:hover { border-color: var(--primary); color: var(--primary); background: 
 }
 .tl-item { position: relative; padding: 0 0 18px 14px; }
 .tl-item:last-child { padding-bottom: 2px; }
+
+/* 版本日志折叠：summary 复用原时间轴头部视觉，默认收起 */
+details.tl-fold > summary { list-style: none; cursor: pointer; }
+details.tl-fold > summary::-webkit-details-marker { display: none; }
+details.tl-fold > summary:hover b { color: var(--primary); }
+.tl-caret { color: var(--faint); transition: transform .18s var(--ease, ease); }
+details[open].tl-fold > summary .tl-caret { transform: rotate(180deg); }
+details.tl-fold > .tl-body { animation: tlOpen .18s ease; }
+@keyframes tlOpen { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .tl-dot {
   position: absolute; left: -18px; top: 7px; width: 10px; height: 10px;
   border-radius: 50%; background: var(--primary);

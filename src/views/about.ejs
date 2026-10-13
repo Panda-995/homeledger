@@ -55,22 +55,26 @@
 </div>
 
 <div class="card">
-  <div class="card-head"><h2>🕘 版本日志</h2></div>
+  <div class="card-head"><h2>🕘 版本日志</h2><span class="muted small">点击版本号展开 / 收起</span></div>
   <div class="about-timeline">
-    <% changelog.forEach(function(c){ %>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-body">
-          <div class="row" style="gap:8px;flex-wrap:wrap">
+    <% changelog.forEach(function(c, idx){ %>
+      <details class="tl-item tl-fold" <%- idx === 0 ? '' : '' %>>
+        <summary class="tl-sum">
+          <div class="tl-dot"></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
             <b>v<%= c.version %></b>
             <span class="tiny muted"><%= c.date %></span>
             <% if (c.tag) { %><span class="chip primary"><%= c.tag %></span><% } %>
+            <span class="tiny muted tl-count"><%= c.items.length %> 项</span>
+            <svg class="icon sm tl-caret"><use href="#i-chevron-down"></use></svg>
           </div>
-          <ul class="small muted" style="margin:6px 0 0 18px">
+        </summary>
+        <div class="tl-body">
+          <ul class="small muted" style="margin:6px 0 4px 18px">
             <% c.items.forEach(function(it){ %><li><%= it %></li><% }); %>
           </ul>
         </div>
-      </div>
+      </details>
     <% }); %>
   </div>
 </div>

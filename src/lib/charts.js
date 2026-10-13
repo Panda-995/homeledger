@@ -68,8 +68,9 @@ function barChart({ labels = [], series = [], height = 240, showLegend = true, v
       const v = Math.abs(Number(se.data[i]) || 0);
       const h = max > 0 ? (v / max) * innerH : 0;
       const y = padT + innerH - h;
+      const tip = `${esc(se.name)} ${esc(lab)}：${nf(v)}${esc(valueUnit)}`;
       if (h > 0.5) {
-        s += `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(se.color)}"><title>${esc(se.name)} ${esc(lab)}：${nf(v)}${esc(valueUnit)}</title></rect>`;
+        s += `<rect x="${x0.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${col(se.color)}" data-tip="${tip}"><title>${tip}</title></rect>`;
       } else {
         s += `<rect x="${x0.toFixed(1)}" y="${(padT + innerH - 1.5).toFixed(1)}" width="${barW.toFixed(1)}" height="1.5" rx="0.75" fill="${col(se.color)}" opacity="0.25"/>`;
       }
@@ -130,7 +131,10 @@ function lineChart({ labels = [], series = [], height = 220, fill = true, valueU
     }
     s += `<path d="${d}" fill="none" stroke="${col(se.color)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     pts.forEach((p, i) => {
-      s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.8" fill="#fff" stroke="${col(se.color)}" stroke-width="2"><title>${esc(se.name)} ${esc(labels[i])}：${nf(se.data[i])}${esc(valueUnit)}</title></circle>`;
+      const tip = `${esc(se.name)} ${esc(labels[i])}：${nf(se.data[i])}${esc(valueUnit)}`;
+      // 大捕捉半径的热点（透明）+ 可见圆点：折线点小不易悬停
+      s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="9" fill="transparent" data-tip="${tip}"><title>${tip}</title></circle>`;
+      s += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.8" fill="#fff" stroke="${col(se.color)}" stroke-width="2" pointer-events="none"/>`;
     });
   });
   labels.forEach((lab, i) => {

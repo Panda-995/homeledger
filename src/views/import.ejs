@@ -6,9 +6,9 @@
 
   <div class="dropzone" id="import-dropzone">
     <span class="big">📥</span>
-    <div class="bold">把账单 CSV 文件拖到这里，或点击选择</div>
-    <div class="muted small mt8">支持支付宝账单、微信支付账单、以及通用 CSV（含日期/金额/备注列即可）</div>
-    <input type="file" id="import-file" accept=".csv,.txt,text/csv" class="hidden">
+    <div class="bold">把账单文件拖到这里，或点击选择</div>
+    <div class="muted small mt8">支持支付宝账单（CSV）、微信支付账单（CSV / xlsx）、以及通用 CSV（含日期/金额/备注列即可）</div>
+    <input type="file" id="import-file" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="hidden">
   </div>
 
   <div class="grid grid-3 mt16">
@@ -16,7 +16,7 @@
       <b>支付宝</b><br>App → 我的 → 账单 → 右上角 ⋯ → 开具交易流水证明 → 用于个人对账 → 下载 CSV
     </div>
     <div class="notice">
-      <b>微信支付</b><br>我 → 服务 → 钱包 → 账单 → 常见问题 → 下载账单 → 用于个人对账 → 下载
+      <b>微信支付</b><br>我 → 服务 → 钱包 → 账单 → 常见问题 → 下载账单 → 用于个人对账 → 下载（CSV 或 xlsx 均可）
     </div>
     <div class="notice">
       <b>重复导入？</b><br>系统以「日期 + 金额 + 商家」判重，重复导入不会产生重复记录。

@@ -598,7 +598,7 @@
     function renderPreview(res, fileName) {
       let html = '<div class="card">';
       html += '<div class="card-head"><h2>解析结果</h2><span class="chip primary">' + esc(res.sourceLabel) + '</span>' +
-        '<span class="chip">编码 ' + esc(res.encoding) + '</span><span class="chip">共 ' + res.count + ' 条</span></div>';
+        '<span class="chip">' + (res.encoding === 'xlsx' ? 'Excel 文件' : '编码 ' + esc(res.encoding)) + '</span><span class="chip">共 ' + res.count + ' 条</span></div>';
       html += '<div class="grid grid-4 mb16">' +
         '<div class="stat"><div class="label">支出合计</div><div class="value amount expense">' + money(res.stat.expense) + '</div></div>' +
         '<div class="stat"><div class="label">收入合计</div><div class="value amount income">' + money(res.stat.income) + '</div></div>' +
@@ -834,6 +834,42 @@
   }
 
   /* ============================ 图片灯箱 ============================ */
+  /* ==================== 图表悬浮金额提示（报表柱状/折线） ==================== */
+  function initChartTips() {
+    let tip = null;
+    const ensure = () => {
+      if (tip) return tip;
+      tip = document.createElement('div');
+      tip.className = 'chart-tip';
+      document.body.appendChild(tip);
+      return tip;
+    };
+    // 委托：SVG 内 [data-tip] 元素（barChart 柱子 / lineChart 捕捉点）
+    document.addEventListener('mouseover', (e) => {
+      const el = e.target.closest && e.target.closest('[data-tip]');
+      if (!el || !el.closest('svg')) return;
+      const t = ensure();
+      t.textContent = el.getAttribute('data-tip');
+      t.classList.add('show');
+      move(e);
+    });
+    const move = (e) => {
+      if (!tip || !tip.classList.contains('show')) return;
+      const pad = 12;
+      const r = tip.getBoundingClientRect();
+      let x = e.clientX + pad, y = e.clientY - r.height - 8;
+      if (x + r.width > innerWidth - 6) x = e.clientX - r.width - pad;
+      if (y < 6) y = e.clientY + pad + 4;
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseout', (e) => {
+      const el = e.target.closest && e.target.closest('[data-tip]');
+      if (el && tip) tip.classList.remove('show');
+    });
+  }
+
   function initLightbox() {
     const imgs = $$('[data-zoom]');
     if (!imgs.length) return;
@@ -1338,6 +1374,7 @@
     initBulk();
     initConfirm();
     initLightbox();
+    initChartTips();
     initListActions();
     initTxnDetail();
     initNumberInputs();
