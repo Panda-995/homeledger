@@ -534,6 +534,15 @@ const DEFAULT_SETTINGS = {
   'ai.auto_save': 'false',
   'security.login_max_fail': '10',
   'security.force_https': 'false',
+  // 预算提醒 / 企业微信推送（详见 src/lib/notify-channels.js）
+  'notify.wecom.enabled': 'false',
+  'notify.wecom.webhook': '',
+  'notify.wecom.time': '20:00',
+  'notify.wecom.digest': 'true',
+  'notify.wecom.instant': 'false',
+  'notify.wecom.forecast': 'true',
+  // text（默认，微信插件也支持）/ markdown / markdown_v2
+  'notify.wecom.msgtype': 'text',
 };
 
 function getSetting(key, def = null) {

@@ -44,6 +44,7 @@ router.get('/budgets', auth.requireLogin, (req, res) => {
   res.render('budgets', {
     title: '预算管理', activeNav: 'budgets', budgets, form: fd.txFormData(ledgerId, req.session.userId),
     overall, totalBudget, month,
+    budgetOverview: sch.monthlyOverview(ledgerId),
   });
 });
 

@@ -21,6 +21,8 @@
   </div>
 </div>
 
+<%- include('partials/budget-overview', { ov: budgetOverview }) %>
+
 <% if (!budgets.length) { %>
   <div class="card">
     <div class="empty">

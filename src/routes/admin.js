@@ -58,6 +58,7 @@ router.get('/settings', auth.requireLogin, (req, res) => {
     cfg,
     aiReady: ai.isAiReady(),
     settings: require('../db').allSettings(),
+    notifyCfg: require('../lib/notify-channels').getConfig(),
     isAdmin,
     newToken,
     admin: adminData,
@@ -245,6 +246,69 @@ router.post('/settings/site', auth.requireLogin, require('../lib/auth').requireA
   res.flash('success', '站点设置已保存');
   res.redirect('/settings#site');
 });
+
+/* ------------------------------ 预算提醒设置 ------------------------------ */
+
+/** 收集表单里的预算提醒配置（保存与测试共用） */
+function readAlertForm(body) {
+  const nc = require('../lib/notify-channels');
+  return {
+    enabled: !!body['notify.wecom.enabled'],
+    webhook: String(body['notify.wecom.webhook'] || '').trim(),
+    time: nc.normalizeTime(body['notify.wecom.time']),
+    digest: !!body['notify.wecom.digest'],
+    instant: !!body['notify.wecom.instant'],
+    forecast: !!body['notify.wecom.forecast'],
+    msgtype: nc.normalizeMsgType(body['notify.wecom.msgtype']),
+  };
+}
+
+router.post('/settings/alert', auth.requireLogin, require('../lib/auth').requireAdmin, (req, res) => {
+  const nc = require('../lib/notify-channels');
+  const v = readAlertForm(req.body);
+  if (v.enabled && !nc.isValidWebhook(v.webhook)) {
+    res.flash('error', '已开启推送，但 Webhook 地址不合法（须为企业微信机器人 https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=... ）');
+    return res.redirect('/settings#alert');
+  }
+  setSetting('notify.wecom.enabled', v.enabled ? 'true' : 'false');
+  setSetting('notify.wecom.webhook', v.webhook);
+  setSetting('notify.wecom.time', v.time);
+  setSetting('notify.wecom.digest', v.digest ? 'true' : 'false');
+  setSetting('notify.wecom.instant', v.instant ? 'true' : 'false');
+  setSetting('notify.wecom.forecast', v.forecast ? 'true' : 'false');
+  setSetting('notify.wecom.msgtype', v.msgtype);
+  auth.audit(req, 'settings.alert', { detail: `enabled=${v.enabled} time=${v.time} msgtype=${v.msgtype}` });
+  res.flash('success', '预算提醒设置已保存');
+  res.redirect('/settings#alert');
+});
+
+/** 发送测试消息：用当前表单值，不必先保存 */
+router.post('/settings/alert/test', auth.requireLogin, require('../lib/auth').requireAdmin, async (req, res) => {
+  const nc = require('../lib/notify-channels');
+  const v = readAlertForm(req.body);
+  if (!nc.isValidWebhook(v.webhook)) {
+    return res.json({ ok: false, error: 'Webhook 地址不合法，请检查后重试' });
+  }
+  const md = [
+    '## ✅ 家账簿 · 测试消息',
+    '> 如果你看到这条，说明企业微信推送已打通。',
+    '',
+    `- 推送时间：每天 ${v.time}`,
+    `- 消息格式：${v.msgtype === 'text' ? '纯文本' : v.msgtype}`,
+    `- 每日预算日报：${v.digest ? '开启' : '关闭'}`,
+    `- 月底预测：${v.forecast ? '开启' : '关闭'}`,
+    `- 即时预警推送：${v.instant ? '开启' : '关闭'}`,
+  ].join('\n');
+  const r = await nc.sendWecom(md, { webhook: v.webhook, msgtype: v.msgtype });
+  res.json({
+    ok: !!r.ok,
+    error: r.error || null,
+    msgtype: v.msgtype,
+    // 机器人会照单全收 markdown，真正拒绝它的是「微信插件」那条转发链路，接口层看不出来
+    hint: v.msgtype === 'text' ? null : '若在微信里看到「不支持此消息类型」，请把消息格式改为「纯文本」',
+  });
+});
+
 
 router.post('/api/ai/test', auth.requireLogin, require('../lib/auth').requireAdmin, async (req, res) => {
   // 允许用表单里未保存的值直接测试

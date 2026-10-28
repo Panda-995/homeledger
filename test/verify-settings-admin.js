@@ -65,7 +65,9 @@ const csrfOf = (html) => (html.match(/name="_csrf"\s+value="([^"]+)"/) || [])[1]
   check('统计卡渲染（用户/账本/记账总数）', r.text.includes('记账总数') && r.text.includes('账单截图'));
   check('运行信息含管理员专属项（内存/PID/备份）', r.text.includes('内存占用') && r.text.includes('/backup/db'));
   check('锚点高亮脚本通用化（按 hash 匹配）', r.text.includes("x.getAttribute('href') === location.hash") || r.text.includes("a.getAttribute('href') === '#' + name"));
-  check('标签切换：6 个区块带 data-tab', (r.text.match(/data-tab="/g) || []).length === 6, String((r.text.match(/data-tab="/g) || []).length));
+  // 7 个区块：account / ai / alert（预算提醒）/ api / site / admin / env
+  check('标签切换：7 个区块带 data-tab', (r.text.match(/data-tab="/g) || []).length === 7, String((r.text.match(/data-tab="/g) || []).length));
+  check('预算提醒区块存在（id=alert）', r.text.includes('id="alert"') && r.text.includes('notify.wecom.webhook'));
   check('标签切换：点击只显示当前区块', r.text.includes("el.getAttribute('data-tab') !== name"));
   check('标签切换：默认显示账号安全', r.text.includes("showTab((location.hash || '#account').slice(1)"));
 

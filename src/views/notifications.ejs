@@ -22,7 +22,7 @@
             <% if (!n.is_read) { %><span class="chip primary">未读</span><% } %>
           </div>
           <% if (n.body) { %>
-            <div class="small muted mt8"><%= n.body.replace(/\|budget:.*$/, '').replace(/\|debt:.*$/, '').replace(/\|goal:.*$/, '') %></div>
+            <div class="small muted mt8"><%= n.body.replace(/\s*\|[a-z][a-z0-9_-]*:.*$/, '') %></div>
           <% } %>
           <div class="tiny muted mt8"><%= helpers.fmtDateTime(n.created_at) %></div>
         </div>

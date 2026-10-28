@@ -1,6 +1,7 @@
 <div class="tabs">
   <a href="#account" class="active">账号安全</a>
   <a href="#ai">AI 记账</a>
+  <a href="#alert">预算提醒</a>
   <a href="#api">开放 API</a>
   <% if (isAdmin) { %><a href="#site">站点设置</a><a href="#admin">系统管理</a><% } %>
   <a href="#env">运行信息</a>
@@ -245,6 +246,98 @@
     &nbsp;&nbsp;-d '{"type":"expense","amount":88,"category":"餐饮","account":"微信零钱","merchant":"肯德基","note":"晚餐"}'
   </div>
 </div>
+
+<div class="card" id="alert" data-tab="alert">
+  <div class="card-head">
+    <h2>🔔 预算提醒（企业微信推送）</h2>
+    <span class="muted small">每天定时推送本月预算日报</span>
+  </div>
+
+  <form method="post" action="/settings/alert">
+    <input type="hidden" name="_csrf" value="<%= csrf %>">
+
+    <label class="check mb12">
+      <input type="checkbox" name="notify.wecom.enabled" value="1" <%= settings['notify.wecom.enabled'] === 'true' ? 'checked' : '' %>>
+      开启企业微信推送
+    </label>
+
+    <div class="field">
+      <label>企业微信群机器人 Webhook 地址</label>
+      <input type="text" name="notify.wecom.webhook" value="<%= notifyCfg.webhook %>"
+             placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx">
+      <div class="tiny muted mt8">
+        获取方式：企业微信群 → 右上角 <code>⋯</code> → 群机器人 → 添加机器人 → 复制 Webhook 地址。
+        地址含密钥，请勿外泄。
+      </div>
+    </div>
+
+    <div class="row wrap" style="gap:12px">
+      <div class="field" style="flex:1;min-width:120px">
+        <label>每日推送时间</label>
+        <input type="time" name="notify.wecom.time" value="<%= notifyCfg.time %>">
+      </div>
+      <div class="field" style="flex:1;min-width:160px">
+        <label>消息格式</label>
+        <select name="notify.wecom.msgtype">
+          <option value="text" <%= notifyCfg.msgtype === 'text' ? 'selected' : '' %>>纯文本（推荐）</option>
+          <option value="markdown" <%= notifyCfg.msgtype === 'markdown' ? 'selected' : '' %>>Markdown</option>
+          <option value="markdown_v2" <%= notifyCfg.msgtype === 'markdown_v2' ? 'selected' : '' %>>Markdown v2</option>
+        </select>
+        <div class="tiny muted mt8">
+          企业微信客户端里 Markdown 排版更好看；但如果你用<b>微信插件</b>（在微信里接收企业微信消息），
+          微信不认 Markdown，只会显示「不支持此消息类型」——这种情况请用<b>纯文本</b>。
+        </div>
+      </div>
+      <div class="field" style="flex:2;min-width:200px">
+        <label>推送内容</label>
+        <div style="padding-top:6px">
+          <label class="check"><input type="checkbox" name="notify.wecom.digest" value="1" <%= settings['notify.wecom.digest'] === 'true' ? 'checked' : '' %>> 每日预算日报（预算 / 已花 / 剩余 / 日均可用）</label>
+          <label class="check"><input type="checkbox" name="notify.wecom.forecast" value="1" <%= settings['notify.wecom.forecast'] === 'true' ? 'checked' : '' %>> 附「按当前速度预测月底」</label>
+          <label class="check"><input type="checkbox" name="notify.wecom.instant" value="1" <%= settings['notify.wecom.instant'] === 'true' ? 'checked' : '' %>> 触发预警线 / 超支时即时推送</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="gap:8px">
+      <button class="btn btn-primary" type="submit">保存</button>
+      <button class="btn" type="button" id="alert-test">发送测试消息</button>
+      <span id="alert-test-msg" class="tiny muted"></span>
+    </div>
+  </form>
+
+  <div class="notice small mt12">
+    推送走企业微信群机器人（无需额外服务器）。定时任务每 30 分钟轮询一次，
+    到达设定时间后当天推送一条，重复调度不会重复发送。
+    即使用纯文本格式，预算日报的换行与 emoji 也会保留，只是不再有加粗/标题样式。
+  </div>
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('alert-test');
+  if (!btn) return;
+  btn.addEventListener('click', async function(){
+    var msg = document.getElementById('alert-test-msg');
+    // 用当前表单里未保存的值测试，避免必须先保存
+    var fd = new FormData(document.querySelector('form[action="/settings/alert"]'));
+    fd.set('_test', '1');
+    btn.disabled = true; msg.textContent = '发送中…';
+    try {
+      var r = await fetch('/settings/alert/test', {
+        method: 'POST',
+        headers: { 'X-CSRF-Token': '<%= csrf %>' },
+        body: new URLSearchParams(fd),
+      });
+      var j = await r.json();
+      msg.textContent = j.ok ? '✅ 已发送，请查看企业微信群' : ('❌ ' + (j.error || '发送失败'));
+    } catch (e) {
+      msg.textContent = '❌ 请求失败：' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
 
 <% if (isAdmin) { %>
 <div class="card" id="site" data-tab="site">

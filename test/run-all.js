@@ -18,6 +18,7 @@ const SUITES = [
   'verify-ai-attachments.js',
   'verify-model-list.js',
   'verify-subscriptions.js',
+  'verify-budget-alert.js',
   'verify-budgets.js',
   'verify-txn-detail.js',
 ];

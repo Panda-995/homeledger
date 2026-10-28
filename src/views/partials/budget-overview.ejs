@@ -1,0 +1,41 @@
+<%# 本月预算总览：预算 X / 已花 Y / 剩余 Z（月度口径聚合） %>
+<% if (typeof ov !== 'undefined' && ov) { %>
+<div class="card mb16">
+  <div class="card-head">
+    <h2>本月预算</h2>
+    <span class="muted small"><%= ov.rangeLabel %> · <%= ov.scopeLabel %> · 共 <%= ov.count %> 条</span>
+    <a class="btn btn-sm btn-ghost" href="/budgets">管理 →</a>
+  </div>
+  <div class="grid grid-3">
+    <div>
+      <div class="tiny muted">本月预算</div>
+      <div class="amount" style="font-size:22px"><%= helpers.fmtAmount(ov.total) %></div>
+    </div>
+    <div>
+      <div class="tiny muted">已花</div>
+      <div class="amount expense" style="font-size:22px"><%= helpers.fmtAmount(ov.used) %></div>
+    </div>
+    <div>
+      <div class="tiny muted">剩余</div>
+      <div class="amount <%= ov.remain < 0 ? 'expense' : 'income' %>" style="font-size:22px"><%= helpers.fmtAmount(ov.remain) %></div>
+    </div>
+  </div>
+  <div class="mt12"><%- charts.progressBar(ov.used, ov.total, { height: 10, warn: ov.level === 'warn' }) %></div>
+  <div class="row between mt8 tiny">
+    <span class="<%= ov.level === 'over' ? 'amount expense' : 'muted' %>">
+      <% if (ov.level === 'over') { %>
+        已超支 <%= helpers.fmtAmount(-ov.remain) %>（已用 <%= ov.ratio.toFixed(0) %>%）
+      <% } else if (ov.level === 'warn') { %>
+        已达预警线：已用 <%= ov.ratio.toFixed(0) %>%（预警线 <%= ov.alertAt %>%）
+      <% } else { %>
+        已用 <%= ov.ratio.toFixed(0) %>%
+      <% } %>
+    </span>
+    <% if (ov.daysLeft > 0) { %>
+      <span class="muted">剩余每天可用 <%= helpers.fmtAmount(ov.dailyAllowance) %> · 本月还剩 <%= ov.daysLeft %> 天</span>
+    <% } else { %>
+      <span class="muted">本月已结束</span>
+    <% } %>
+  </div>
+</div>
+<% } %>

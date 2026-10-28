@@ -6,7 +6,7 @@ const auth = require('../lib/auth');
 const txn = require('../lib/txn');
 const fd = require('../lib/formdata');
 const u = require('../lib/util');
-const { budgetPeriodRange, budgetUsedInRange } = require('../lib/scheduler');
+const { budgetPeriodRange, budgetUsedInRange, monthlyOverview } = require('../lib/scheduler');
 
 const router = express.Router();
 
@@ -73,6 +73,7 @@ router.get('/', auth.requireLogin, (req, res, next) => {
     cats: cats.slice(0, 8),
     incomeCats: incomeCats.slice(0, 6),
     overview,
+    budgetOverview: monthlyOverview(ledgerId),
     budgets,
     recent,
     todayList,
